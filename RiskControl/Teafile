@@ -1,7 +1,7 @@
 {
   "scope": "alipaycloud",
   "name": "RiskControl",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "./main.tea",
   "maintainers": [
     {
@@ -10,11 +10,11 @@
     }
   ],
   "releases": {
-    "java": "com.aliyun:riskcontrol:0.0.1",
+    "java": "com.aliyun:riskcontrol:1.0.1",
     "go": "github.com/alipaycloud/RiskControl/client:v1.0.1",
-    "csharp": "AlipayCloud.SDK.RiskControl:0.0.1",
+    "csharp": "AlipayCloud.SDK.RiskControl:1.0.1",
     "ts": "@alipaycloud/riskcontrol:1.0.1",
-    "php": "alipaycloud/riskcontrol:^0.1.0",
+    "php": "alipaycloud/riskcontrol:1.0.1",
     "python": "alipaycloud_sdk_riskcontrol:0.0.1"
   },
   "libraries": {
