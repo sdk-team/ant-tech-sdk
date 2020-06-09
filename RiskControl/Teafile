@@ -1,0 +1,60 @@
+{
+  "scope": "alipaycloud",
+  "name": "RiskControl",
+  "version": "0.0.4",
+  "main": "./main.tea",
+  "maintainers": [
+    {
+      "name": "Alibaba Cloud SDK",
+      "email": "sdk-team@alibabacloud.com"
+    }
+  ],
+  "releases": {
+    "java": "com.aliyun:riskcontrol:0.0.1",
+    "go": "github.com/alipaycloud/RiskControl/client:v1.0.1",
+    "csharp": "AlipayCloud.SDK.RiskControl:0.0.1",
+    "ts": "@alipaycloud/riskcontrol:1.0.1",
+    "php": "alipaycloud/riskcontrol:^0.1.0",
+    "python": "alipaycloud_sdk_riskcontrol:0.0.1"
+  },
+  "libraries": {
+    "Util": "alibabacloud:Util:*",
+    "RPCUtil": "alibabacloud:RPCUtil:*",
+    "AlipayUtil": "alipaycloud:AlipayUtil:*"
+  },
+  "java": {
+    "package": "com.aliyun.riskcontrol",
+    "packageInfo": {
+      "description": "Alibaba Cloud alipay SDK for Java",
+      "url": "https://github.com/aliyun/alibabacloud-sdk",
+      "licenseNmae": "The Apache License, Version 2.0",
+      "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+      "developerId": "aliyunproducts",
+      "developerName": "Aliyun SDK",
+      "developerEmail": "aliyunsdk@aliyun.com"
+    }
+  },
+  "csharp": {
+    "className": "Client",
+    "namespace": "alipaycloud.SDK.riskcontrol",
+    "packageInfo": {
+      "name": "facebody",
+      "title": "alipaycloud-riskcontrol",
+      "description": "Alibaba Cloud RiskControl SDK Library for .NET",
+      "company": "Alibaba Cloud, Inc"
+    }
+  },
+  "php": {
+    "package": "Alipaycloud.RiskControl",
+    "clientName": "Client",
+    "packageInfo": {
+      "name": "alipaycloud/riskcontrol",
+      "desc": "Alipay Cloud SDK Library for PHP",
+      "github": "https://github.com/aliyun/alipaycloud"
+    }
+  },
+  "python": {
+    "package": "alipaycloud_sdk_riskcontrol",
+    "clientName": "client"
+  }
+}
