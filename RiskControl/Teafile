@@ -38,7 +38,7 @@
     "className": "Client",
     "namespace": "alipaycloud.SDK.riskcontrol",
     "packageInfo": {
-      "name": "facebody",
+      "name": "riskcontrol",
       "title": "alipaycloud-riskcontrol",
       "description": "Alibaba Cloud RiskControl SDK Library for .NET",
       "company": "Alibaba Cloud, Inc"
