@@ -1,11 +1,11 @@
 {
   "scope": "alipaycloud",
   "name": "RiskControl",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "main": "./main.tea",
   "maintainers": [
     {
-      "name": "Alibaba Cloud SDK",
+      "name": "Alipay Cloud SDK",
       "email": "sdk-team@alibabacloud.com"
     }
   ],
@@ -25,18 +25,18 @@
   "java": {
     "package": "com.aliyun.riskcontrol",
     "packageInfo": {
-      "description": "Alibaba Cloud alipay SDK for Java",
-      "url": "https://github.com/aliyun/alibabacloud-sdk",
+      "description": "Alipay Cloud RiskControl SDK for Java",
+      "url": "https://github.com/alipaycloud",
       "licenseNmae": "The Apache License, Version 2.0",
       "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0.txt",
-      "developerId": "aliyunproducts",
-      "developerName": "Aliyun SDK",
-      "developerEmail": "aliyunsdk@aliyun.com"
+      "developerId": "alipayproducts",
+      "developerName": "AlipayCloud SDK",
+      "developerEmail": "alipaysdk@alipay.com"
     }
   },
   "csharp": {
     "className": "Client",
-    "namespace": "alipaycloud.SDK.riskcontrol",
+    "namespace": "Alipaycloud.SDK.RiskControl",
     "packageInfo": {
       "name": "riskcontrol",
       "title": "alipaycloud-riskcontrol",
@@ -50,11 +50,21 @@
     "packageInfo": {
       "name": "alipaycloud/riskcontrol",
       "desc": "Alipay Cloud SDK Library for PHP",
-      "github": "https://github.com/aliyun/alipaycloud"
+      "github": "https://github.com/alipaycloud",
+      "files": {
+        "LICENSE": "../LICENSE"
+      }
     }
   },
   "python": {
     "package": "alipaycloud_sdk_riskcontrol",
-    "clientName": "client"
+    "clientName": "client",
+    "packageInfo": {
+      "name": "alipaycloud_riskcontrol",
+      "desc": "Alipay Cloud RiskControl SDK Library for Python",
+      "github": "https://github.com/alipaycloud",
+      "author": "Alipay Cloud SDK",
+      "email": "sdk-team@alibabacloud.com"
+    }
   }
 }
