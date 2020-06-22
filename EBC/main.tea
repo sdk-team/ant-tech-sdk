@@ -1,0 +1,873 @@
+import AlipayUtil;
+import Util;
+import RPCUtil;
+
+type @endpoint = string
+type @regionId = string
+type @accessKeyId = string
+type @accessKeySecret = string
+type @protocol = string
+type @userAgent = string
+type @readTimeout = number
+type @connectTimeout = number
+type @httpProxy = string
+type @httpsProxy = string
+type @socks5Proxy = string
+type @socks5NetWork = string
+type @noProxy = string
+type @maxIdleConns = number
+type @authToken = string
+type @tenant = string
+type @workspace = string
+
+/**
+ * Model for initing client
+ */
+model Config {
+  accessKeyId?: string(description='accesskey id',default=''),
+  accessKeySecret?: string(description='accesskey secret',default=''),
+  authToken?: string(description='auth token',default=''),
+  protocol?: string(description='http protocol',example='http',default='http'),
+  regionId?: string(description='region id',example='cn-hangzhou',default=''),
+  readTimeout?: number(description='read timeout',example='10',default=''),
+  connectTimeout?: number(description='connect timeout',example='10',default=''),
+  httpProxy?: string(description='http proxy',example='http://localhost',default=''),
+  httpsProxy?: string(description='https proxy',example='https://localhost',default=''),
+  endpoint?: string(description='endpoint',example='cs.aliyuncs.com',default=''),
+  noProxy?: string(description='proxy white list',example='http://localhost',default=''),
+  maxIdleConns?: number(description='max idle conns',example='3',default=''),
+  userAgent?: string(description='user agent',example='Alibabacloud/1',default=''),
+  socks5Proxy?: string(description='socks5 proxy',default=''),
+  socks5NetWork?: string(description='socks5 network',example='TCP',default=''),
+  tenant?: string(description='当需要调用API操作指定租户的资源时， 需要提供目标租户的ID',default='',example='MYBKC1CN'),
+  workspace?: string(description='当需要调用API操作指定工作空间的资源时， 需要提供目标工作空间的ID',example='Prod',default=''),
+}
+
+/**
+ * Init client with Config
+ * @param config config contains the necessary information to create a client
+ */
+init(config: Config) {
+  if (Util.isUnset(config)) {
+    throw {
+      code = 'ParameterMissing',
+      message = '\'config\' can not be unset'
+    };
+  }
+
+  @accessKeyId = config.accessKeyId;
+  @accessKeySecret = config.accessKeySecret;
+  @tenant = config.tenant;
+  @workspace = config.workspace;
+  @endpoint = config.endpoint;
+  @authToken = config.authToken;
+  @protocol = config.protocol;
+  @regionId = config.regionId;
+  @userAgent = config.userAgent;
+  @readTimeout = config.readTimeout;
+  @connectTimeout = config.connectTimeout;
+  @httpProxy = config.httpProxy;
+  @httpsProxy = config.httpsProxy;
+  @noProxy = config.noProxy;
+  @socks5Proxy = config.socks5Proxy;
+  @socks5NetWork = config.socks5NetWork;
+  @maxIdleConns = config.maxIdleConns;
+}
+
+/**
+ * Encapsulate the request and invoke the network
+ * @param action api name
+ * @param protocol http or https
+ * @param method e.g. GET
+ * @param pathname pathname of every api
+ * @param request which contains request params
+ * @param runtime which controls some details of call api, such as retry times
+ * @return the response
+ */
+api doRequest(action: string, protocol: string, method: string, pathname: string, request: object, runtime: Util.RuntimeOptions): object {
+  __request.protocol = Util.defaultString(@protocol, protocol);
+  __request.method = method;
+  __request.pathname = pathname;
+  __request.query = {
+    method = action,
+    version = '1.0',
+    sign_type = 'HmacSHA1',
+    req_time = AlipayUtil.getTimestamp(),
+    req_msg_id = Util.getNonce(),
+  };
+
+  if (!Util.empty(@tenant)) {
+    __request.query.tenant = @tenant;
+  }
+
+  if (!Util.empty(@workspace)) {
+    __request.query.workspace = @workspace;
+  }
+
+  if (!Util.empty(@authToken)) {
+    __request.query.auth_token = @authToken;
+  } else {
+    __request.query.access_key = @accessKeyId;
+  }
+
+  __request.headers = {
+    host = @endpoint,
+    user-agent = getUserAgent()
+  };
+
+  var tmp = Util.anyifyMapValue(RPCUtil.query(request));
+  __request.body = Util.toFormString(tmp);
+  __request.headers.content-type = 'application/x-www-form-urlencoded';
+
+  var signedParam = {
+    ...__request.query,
+    ...RPCUtil.query(request)
+  };
+  __request.query.sign = AlipayUtil.getSignature(signedParam, @accessKeySecret);
+} returns {
+  var obj = Util.readAsJSON(__response.body);
+  var res = Util.assertAsMap(obj);
+  var resp = Util.assertAsMap(res.response);
+
+  if (AlipayUtil.hasError(res)) {
+    throw {
+      message = resp.result_msg,
+      data = resp,
+      code = resp.result_code
+    };
+  }
+  return resp;
+} runtime {
+  timeouted = 'retry',
+  readTimeout = Util.defaultNumber(runtime.readTimeout, @readTimeout),
+  connectTimeout = Util.defaultNumber(runtime.connectTimeout, @connectTimeout),
+  httpProxy = Util.defaultString(runtime.httpProxy, @httpProxy),
+  httpsProxy = Util.defaultString(runtime.httpsProxy, @httpsProxy),
+  noProxy = Util.defaultString(runtime.noProxy, @noProxy),
+  maxIdleConns = Util.defaultNumber(runtime.maxIdleConns, @maxIdleConns),
+  retry = {
+    retryable = runtime.autoretry,
+    maxAttempts = Util.defaultNumber(runtime.maxAttempts, 3)
+  },
+  backoff = {
+    policy = Util.defaultString(runtime.backoffPolicy, 'no'),
+    period = Util.defaultNumber(runtime.backoffPeriod, 1)
+  },
+  ignoreSSL = runtime.ignoreSSL
+}
+
+/**
+ * Get user agent
+ * @return user agent
+ */
+function getUserAgent(): string {
+  var userAgent = Util.getUserAgent(@userAgent);
+  return userAgent;
+}
+
+model Cert {
+  certCode?: string(maxLength=64, name='cert_code', example='0001', description='证书编号'),
+  certEndTime?: string(pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_end_time', example='2018-10-10T10:10:00Z', description='时间周期结束时间'),
+  certId?: string(maxLength=128, name='cert_id', example='0001', description='证书id'),
+  certNameCn?: string(maxLength=64, name='cert_name_cn', example='四六级', description='证书名称-中文'),
+  certNameEn?: string(name='cert_name_en', example='CET', description='证书名称-英文（拼音）'),
+  certPublishTime?: string(pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_publish_time', example='2018-10-10T10:10:00Z', description='首次发布时间'),
+  certStartTime?: string(pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_start_time', example='2018-10-10T10:10:00Z', description='时间周期开始时间'),
+  certStatus?: long(name='cert_status', example='1', description='1-有效
+2-冻结
+3-失效
+4-作废
+5-其他'),
+  certUrl?: string(maxLength=256, name='cert_url', example='https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3 ', description='实体证书图片url'),
+  country?: string(maxLength=32, name='country', example='001', description='证书归属国家
+使用“ISO 3166-1”代码表-数字码
+https://zh.wikipedia.org/wiki/ISO_3166-1'),
+  expireType?: long(name='expire_type', example='1', description='1.长期有效
+2.时间周期'),
+  featureUrl?: string(maxLength=512, name='feature_url', example='https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3', description='其他信息文件url'),
+  holderAvatar?: string(maxLength=256, name='holder_avatar', example=' https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3Kep', description='持有人的人脸图像url'),
+  holderName?: string(maxLength=64, name='holder_name', example='张三', description='证书持有人姓名'),
+  level?: string(maxLength=32, name='level', example='初级（五级）', description='证书等级类型：
+初级（五级）、中级（四级）、高级（三级）、技师（二级）和高级技师（一级）、其他'),
+  orgDid?: string(maxLength=128, name='org_did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', description='企业did'),
+  orgName?: string(maxLength=64, name='org_name', example='蚂蚁金服', description='企业名称'),
+  orgUserId?: string(maxLength=128, name='org_user_id', example='0001', description='证书持有人id'),
+  primaryIdNo?: string(maxLength=64, name='primary_id_no', example='0000000000000000', description='持有人主证件编号，无身份证的个人使用0000000000000000'),
+  secondIdNo1?: string(maxLength=64, name='second_id_no_1', example='G1223333', description='持有人辅助证件编号-1'),
+  secondIdNo2?: string(maxLength=64, name='second_id_no_2', example='G1223333', description='持有人辅助证件编号-2'),
+  secondIdNo3?: string(maxLength=64, name='second_id_no_3', example='G12233333', description='持有人辅助证件编号-3'),
+  type?: string(name='type', example='XLZ', description='-数字码类型为156时可使用如下类目：
+--学历证书-XLZ
+--职业证书--ZYZ
+-其他国家传入--QT'),
+}
+
+model OrgUser {
+  orgDid?: string(maxLength=128, name='org_did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', description='企业did'),
+  orgUserId?: string(maxLength=128, name='org_user_id', example='0001', description='企业用户id'),
+}
+
+model Class {
+  classId?: string(maxLength=128, name='class_id', example='0001', description='班级id'),
+  orgDid?: string(maxLength=128, name='org_did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', description='企业did'),
+}
+
+model DeleteCourseClassRequest = {
+  classList?: [ Class ](description='班级列表,最多一次传入50个', example='', name='class_list'),
+  courseId?: string(description='课程id', example='0001', maxLength=128, name='course_id'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+}
+
+model DeleteCourseClassResponse = {
+  failList?: [ Class ](description='删除失败的班级列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 删除课程中的班级
+ * Summary: 删除课程班级
+ */
+async function deleteCourseClass(request: DeleteCourseClassRequest): DeleteCourseClassResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return deleteCourseClassEx(request, runtime);
+}
+
+/**
+ * Description: 删除课程中的班级
+ * Summary: 删除课程班级
+ */
+async function deleteCourseClassEx(request: DeleteCourseClassRequest, runtime: Util.RuntimeOptions): DeleteCourseClassResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.course.class.delete', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ApplyCertUrlRequest = {
+  certCode?: string(description='证书code', example='G00011', maxLength=128, name='cert_code'),
+  orgDid?: string(description='机构did', example='mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgUserId?: string(description='证书持有人id', example='0001', name='org_user_id'),
+}
+
+model ApplyCertUrlResponse = {
+  certUploadUrl?: string(description='实体证书图片上传url，文件最大5M', example='https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3 ', name='cert_upload_url'),
+  featureUploadUrl?: string(description='其他信息文件上传url，文件最大5M
+', example='https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3 ', name='feature_upload_url'),
+  holderAvatarUploadUrl?: string(description='持有人的人脸图像上传url，文件最大5M', example='https://xxx.aliyuncs.com/xxx/xx/xx/xx.xlsx?Expires=1589536141&OSSAccessKeyId=TMP.3Kep ', name='holder_avatar_upload_url'),
+}
+
+/**
+ * Description: 申请证书信息上传url，证书未发布则会返回证书图片、证书持有人、证书其他信息的文件上传url。
+证书已发布则会返回证书图片、证书其他信息的文件上传url。
+文件最大5M
+ * Summary: 申请证书信息上传url
+ */
+async function applyCertUrl(request: ApplyCertUrlRequest): ApplyCertUrlResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return applyCertUrlEx(request, runtime);
+}
+
+/**
+ * Description: 申请证书信息上传url，证书未发布则会返回证书图片、证书持有人、证书其他信息的文件上传url。
+证书已发布则会返回证书图片、证书其他信息的文件上传url。
+文件最大5M
+ * Summary: 申请证书信息上传url
+ */
+async function applyCertUrlEx(request: ApplyCertUrlRequest, runtime: Util.RuntimeOptions): ApplyCertUrlResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.cert.url.apply', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model AddCourseClassRequest = {
+  classList?: [ Class ](description='班级列表,最多一次传入50个', example='', name='class_list'),
+  courseId?: string(description='班级id', example='0001', maxLength=128, name='course_id'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+}
+
+model AddCourseClassResponse = {
+  failList?: [ Class ](description='添加失败的班级列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 将班级添加到课程中
+ * Summary: 增加课程班级
+ */
+async function addCourseClass(request: AddCourseClassRequest): AddCourseClassResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return addCourseClassEx(request, runtime);
+}
+
+/**
+ * Description: 将班级添加到课程中
+ * Summary: 增加课程班级
+ */
+async function addCourseClassEx(request: AddCourseClassRequest, runtime: Util.RuntimeOptions): AddCourseClassResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.course.class.add', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model AddClassUserRequest = {
+  classId?: string(description='班级id', example='0001', maxLength=128, name='class_id'),
+  orgDid?: string(description='企业id', example='mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36', maxLength=128, name='org_did'),
+  orgUserList?: [ OrgUser ](description='企业用户列表,最多一次传入50个', example='', name='org_user_list'),
+}
+
+model AddClassUserResponse = {
+  failList?: [ OrgUser ](description='加入失败的用户列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 增加学员
+ * Summary: 增加学员
+ */
+async function addClassUser(request: AddClassUserRequest): AddClassUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return addClassUserEx(request, runtime);
+}
+
+/**
+ * Description: 增加学员
+ * Summary: 增加学员
+ */
+async function addClassUserEx(request: AddClassUserRequest, runtime: Util.RuntimeOptions): AddClassUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.class.user.add', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryOrganizationCertRequest = {
+  end?: string(description='查询结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='end'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  start?: string(description='开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='start'),
+}
+
+model QueryOrganizationCertResponse = {
+  certIdList?: [ string ](description='证书id', example='0001', name='cert_id_list'),
+}
+
+/**
+ * Description: 查询证书
+ * Summary: 查询企业证书
+ */
+async function queryOrganizationCert(request: QueryOrganizationCertRequest): QueryOrganizationCertResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryOrganizationCertEx(request, runtime);
+}
+
+/**
+ * Description: 查询证书
+ * Summary: 查询企业证书
+ */
+async function queryOrganizationCertEx(request: QueryOrganizationCertRequest, runtime: Util.RuntimeOptions): QueryOrganizationCertResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.cert.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model AddCourseUserRequest = {
+  courseId?: string(description='课程id', example='0001', maxLength=128, name='course_id'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgUserList?: [ OrgUser ](description='企业用户列表,最多一次传入50个', example='', name='org_user_list'),
+}
+
+model AddCourseUserResponse = {
+  failList?: [ OrgUser ](description='添加失败的用户列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 将学员添加到课程中
+ * Summary: 增加课程学员
+ */
+async function addCourseUser(request: AddCourseUserRequest): AddCourseUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return addCourseUserEx(request, runtime);
+}
+
+/**
+ * Description: 将学员添加到课程中
+ * Summary: 增加课程学员
+ */
+async function addCourseUserEx(request: AddCourseUserRequest, runtime: Util.RuntimeOptions): AddCourseUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.course.user.add', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model DeleteCourseUserRequest = {
+  courseId?: string(description='课程id', example='0001', maxLength=128, name='course_id'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgUserList?: [ OrgUser ](description='企业用户列表,最多一次传入50个', example='', name='org_user_list'),
+}
+
+model DeleteCourseUserResponse = {
+  failList?: [ OrgUser ](description='删除失败的用户列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 删除课程中的学员
+ * Summary: 删除课程学员
+ */
+async function deleteCourseUser(request: DeleteCourseUserRequest): DeleteCourseUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return deleteCourseUserEx(request, runtime);
+}
+
+/**
+ * Description: 删除课程中的学员
+ * Summary: 删除课程学员
+ */
+async function deleteCourseUserEx(request: DeleteCourseUserRequest, runtime: Util.RuntimeOptions): DeleteCourseUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.course.user.delete', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateOrganizationClassRequest = {
+  capacity?: number(description='班级容量', example='123', name='capacity'),
+  classEndTime?: string(description='结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='class_end_time'),
+  className?: string(description='班级名称', example='001', maxLength=64, name='class_name'),
+  classStartTime?: string(description='开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='class_start_time'),
+  classStatus?: number(description='1:有效、2:暂停、3:失效', example='1', name='class_status'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  type?: number(description='1线上、2线下、3混合', example='1', name='type'),
+}
+
+model CreateOrganizationClassResponse = {
+  classId?: string(description='班级id', example='0001', name='class_id'),
+}
+
+/**
+ * Description: 创建班级
+ * Summary: 创建班级
+ */
+async function createOrganizationClass(request: CreateOrganizationClassRequest): CreateOrganizationClassResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createOrganizationClassEx(request, runtime);
+}
+
+/**
+ * Description: 创建班级
+ * Summary: 创建班级
+ */
+async function createOrganizationClassEx(request: CreateOrganizationClassRequest, runtime: Util.RuntimeOptions): CreateOrganizationClassResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.class.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryClassUserRequest = {
+  classId?: string(description='班级id', example='0001', maxLength=128, name='class_id'),
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+}
+
+model QueryClassUserResponse = {
+  className?: string(description='班级名称', example='101班', name='class_name'),
+  orgUserIdList?: [ string ](description='企业用户id列表', example='0001', name='org_user_id_list'),
+  userNum?: number(description='学员数量', example='100', name='user_num'),
+}
+
+/**
+ * Description: 班级明细查询
+ * Summary: 班级明细查询
+ */
+async function queryClassUser(request: QueryClassUserRequest): QueryClassUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryClassUserEx(request, runtime);
+}
+
+/**
+ * Description: 班级明细查询
+ * Summary: 班级明细查询
+ */
+async function queryClassUserEx(request: QueryClassUserRequest, runtime: Util.RuntimeOptions): QueryClassUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.class.user.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryCertRequest = {
+  certId?: string(description='证书id', example='0001', maxLength=128, name='cert_id'),
+  orgDid?: string(description='企业did', example='dimychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36', maxLength=128, name='org_did'),
+}
+
+model QueryCertResponse = {
+  cert?: Cert(description='证书明细', example='{}', name='cert'),
+}
+
+/**
+ * Description: 证书明细查询
+ * Summary: 证书明细查询
+ */
+async function queryCert(request: QueryCertRequest): QueryCertResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryCertEx(request, runtime);
+}
+
+/**
+ * Description: 证书明细查询
+ * Summary: 证书明细查询
+ */
+async function queryCertEx(request: QueryCertRequest, runtime: Util.RuntimeOptions): QueryCertResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.cert.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateOrganizationCourseRequest = {
+  courseEndTime?: string(description='课程结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='course_end_time'),
+  courseId?: string(description='课程id', example='0001', maxLength=128, name='course_id'),
+  courseName?: string(description='课程名称', example='高数', maxLength=64, name='course_name'),
+  courseStartTime?: string(description='课程开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='course_start_time'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  period?: number(description='课程时长', example='100', name='period'),
+}
+
+model UpdateOrganizationCourseResponse = {
+}
+
+/**
+ * Description: 更新课程
+ * Summary: 更新课程
+ */
+async function updateOrganizationCourse(request: UpdateOrganizationCourseRequest): UpdateOrganizationCourseResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateOrganizationCourseEx(request, runtime);
+}
+
+/**
+ * Description: 更新课程
+ * Summary: 更新课程
+ */
+async function updateOrganizationCourseEx(request: UpdateOrganizationCourseRequest, runtime: Util.RuntimeOptions): UpdateOrganizationCourseResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.course.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CancelPersonRequest = {
+  personDid?: string(description='个人id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='person_did'),
+}
+
+model CancelPersonResponse = {
+}
+
+/**
+ * Description: 个人退出
+ * Summary: 个人退出
+ */
+async function cancelPerson(request: CancelPersonRequest): CancelPersonResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return cancelPersonEx(request, runtime);
+}
+
+/**
+ * Description: 个人退出
+ * Summary: 个人退出
+ */
+async function cancelPersonEx(request: CancelPersonRequest, runtime: Util.RuntimeOptions): CancelPersonResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.person.cancel', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateUserCertRequest = {
+  certCode?: string(description='证书编号', example='0001', maxLength=64, name='cert_code'),
+  certEndTime?: string(description='时间周期结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_end_time'),
+  certNameCn?: string(description='证书名称-中文', example='四六级', maxLength=64, name='cert_name_cn'),
+  certNameEn?: string(description='证书名称-英文（拼音）', example='CET', maxLength=64, name='cert_name_en'),
+  certPublishTime?: string(description='首次发布时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_publish_time'),
+  certStartTime?: string(description='时间周期开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='cert_start_time'),
+  certStatus?: number(description='1-有效 2-冻结 3-失效 4-作废 5-其他', example='1', name='cert_status'),
+  country?: string(description='证书归属国家 使用“ISO 3166-1”代码表-数字码 https://zh.wikipedia.org/wiki/ISO_3166-1', example='001', maxLength=32, name='country'),
+  expireType?: number(description='有效期类型1.长期有效 2.时间周期', example='1', name='expire_type'),
+  holderName?: string(description='证书持有人姓名
+', example='张三', maxLength=64, name='holder_name'),
+  level?: string(description='证书等级类型： 初级（五级）、中级（四级）、高级（三级）、技师（二级）和高级技师（一级）、其他', example='初级（五级）', maxLength=32, name='level'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgName?: string(description='企业名称', example='蚂蚁金服 ', maxLength=64, name='org_name'),
+  orgUserId?: string(description='企业用户id', example='0001', maxLength=128, name='org_user_id'),
+  primaryIdNo?: string(description='持有人主证件编号，无身份证的个人使用0000000000000000
+请使用我们提供的公钥对数据进行加密
+', example='0000000000000000', maxLength=1024, name='primary_id_no'),
+  secondIdNo1?: string(description='持有人辅助证件编号-1
+请使用我们提供的公钥对数据进行加密', example='G1223333', maxLength=1024, name='second_id_no_1'),
+  secondIdNo2?: string(description='持有人辅助证件编号-2
+请使用我们提供的公钥对数据进行加密', example='G1223333', maxLength=1024, name='second_id_no_2'),
+  secondIdNo3?: string(description='持有人辅助证件编号-3
+请使用我们提供的公钥对数据进行加密', example='G12233333', maxLength=1024, name='second_id_no_3'),
+  type?: string(description='-数字码类型为156时可使用如下类目： --学历证书-XLZ --职业证书--ZYZ -其他国家传入--QT', example='XLZ', maxLength=64, name='type'),
+}
+
+model CreateUserCertResponse = {
+  certId?: string(description='证书id', example='0001', name='cert_id'),
+}
+
+/**
+ * Description: 发布证书
+ * Summary: 发布证书
+ */
+async function createUserCert(request: CreateUserCertRequest): CreateUserCertResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createUserCertEx(request, runtime);
+}
+
+/**
+ * Description: 发布证书
+ * Summary: 发布证书
+ */
+async function createUserCertEx(request: CreateUserCertRequest, runtime: Util.RuntimeOptions): CreateUserCertResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.user.cert.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model DeleteClassUserRequest = {
+  classId?: string(description='班级id', example='0001', maxLength=128, name='class_id'),
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgUserList?: [ OrgUser ](description='企业用户列表,最多一次传入50个', example='', name='org_user_list'),
+}
+
+model DeleteClassUserResponse = {
+  failList?: [ OrgUser ](description='删除失败的用户列表', example='', name='fail_list'),
+}
+
+/**
+ * Description: 删除学员
+ * Summary: 删除学员
+ */
+async function deleteClassUser(request: DeleteClassUserRequest): DeleteClassUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return deleteClassUserEx(request, runtime);
+}
+
+/**
+ * Description: 删除学员
+ * Summary: 删除学员
+ */
+async function deleteClassUserEx(request: DeleteClassUserRequest, runtime: Util.RuntimeOptions): DeleteClassUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.class.user.delete', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreatePersonRequest = {
+  personName?: string(description='姓名', example='张三', maxLength=32, name='person_name'),
+  primaryIdNo?: string(description='持有人主证件编号，无身份证的个人使用0000000000000000
+请使用我们提供的公钥对数据进行加密', example='0000000000000000', maxLength=1024, name='primary_id_no'),
+  secondIdNo1?: string(description='持有人辅助证件编号-1
+请使用我们提供的公钥对数据进行加密', example='G123456', maxLength=1024, name='second_id_no_1'),
+  secondIdNo2?: string(description='持有人辅助证件编号-1
+请使用我们提供的公钥对数据进行加密', example='G12333', maxLength=1024, name='second_id_no_2'),
+  secondIdNo3?: string(description='持有人辅助证件编号-3
+请使用我们提供的公钥对数据进行加密', example='G12345612', maxLength=1024, name='second_id_no_3'),
+}
+
+model CreatePersonResponse = {
+  personDid?: string(description='个人id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', name='person_did'),
+}
+
+/**
+ * Description: 创建个人
+ * Summary: 创建个人
+ */
+async function createPerson(request: CreatePersonRequest): CreatePersonResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createPersonEx(request, runtime);
+}
+
+/**
+ * Description: 创建个人
+ * Summary: 创建个人
+ */
+async function createPersonEx(request: CreatePersonRequest, runtime: Util.RuntimeOptions): CreatePersonResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.person.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ResumePersonRequest = {
+  personDid?: string(description='个人did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='person_did'),
+}
+
+model ResumePersonResponse = {
+}
+
+/**
+ * Description: 用户复入
+ * Summary: 用户复入
+ */
+async function resumePerson(request: ResumePersonRequest): ResumePersonResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return resumePersonEx(request, runtime);
+}
+
+/**
+ * Description: 用户复入
+ * Summary: 用户复入
+ */
+async function resumePersonEx(request: ResumePersonRequest, runtime: Util.RuntimeOptions): ResumePersonResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.person.resume', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryOrganizationClassRequest = {
+  classId?: string(description='班级id', example='0001', maxLength=128, name='class_id'),
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+}
+
+model QueryOrganizationClassResponse = {
+  className?: string(description='班级名称', example='101班', name='class_name'),
+  classStatus?: number(description='1:有效、2:暂停、3:失效', example='1', name='class_status'),
+  createTime?: string(description='创建时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='create_time'),
+  modifyTime?: string(description='修改时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='modify_time'),
+  period?: number(description='累计时长', example='单位秒', name='period'),
+  type?: string(description='班级类型：线上、线下、混合', example='线上', name='type'),
+  userNum?: number(description='学员数量', example='100', name='user_num'),
+}
+
+/**
+ * Description: 班级查询
+ * Summary: 班级查询
+ */
+async function queryOrganizationClass(request: QueryOrganizationClassRequest): QueryOrganizationClassResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryOrganizationClassEx(request, runtime);
+}
+
+/**
+ * Description: 班级查询
+ * Summary: 班级查询
+ */
+async function queryOrganizationClassEx(request: QueryOrganizationClassRequest, runtime: Util.RuntimeOptions): QueryOrganizationClassResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.class.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateOrganizationClassRequest = {
+  capacity?: number(description='容量', example='123', name='capacity'),
+  classEndTime?: string(description='结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='class_end_time'),
+  classId?: string(description='班级id', example='0001', maxLength=128, name='class_id'),
+  className?: string(description='班级名称', example='001', maxLength=64, name='class_name'),
+  classStartTime?: string(description='开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='class_start_time'),
+  classStatus?: number(description='1:有效、2:暂停、3:失效', example='1', name='class_status'),
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+}
+
+model UpdateOrganizationClassResponse = {
+}
+
+/**
+ * Description: 更新班级
+ * Summary: 更新班级
+ */
+async function updateOrganizationClass(request: UpdateOrganizationClassRequest): UpdateOrganizationClassResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateOrganizationClassEx(request, runtime);
+}
+
+/**
+ * Description: 更新班级
+ * Summary: 更新班级
+ */
+async function updateOrganizationClassEx(request: UpdateOrganizationClassRequest, runtime: Util.RuntimeOptions): UpdateOrganizationClassResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.class.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryUserCertRequest = {
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  orgUserId?: string(description='企业用户id', example='0001', maxLength=128, name='org_user_id'),
+}
+
+model QueryUserCertResponse = {
+  certIdList?: [ string ](description='证书id列表', example='0001', name='cert_id_list'),
+}
+
+/**
+ * Description: 查询用户证书
+ * Summary: 查询用户证书
+ */
+async function queryUserCert(request: QueryUserCertRequest): QueryUserCertResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryUserCertEx(request, runtime);
+}
+
+/**
+ * Description: 查询用户证书
+ * Summary: 查询用户证书
+ */
+async function queryUserCertEx(request: QueryUserCertRequest, runtime: Util.RuntimeOptions): QueryUserCertResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.user.cert.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateOrganizationCourseRequest = {
+  courseEndTime?: string(description='课程结束时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='course_end_time'),
+  courseName?: string(description='课程名称', example='5年高考', maxLength=64, name='course_name'),
+  courseStartTime?: string(description='课程开始时间', example='2018-10-10T10:10:00Z', pattern='\\\\d{4}[-]\\\\d{1,2}[-]\\\\d{1,2}(\\\\s\\\\d{2}:\\\\d{2}(:\\\\d{2})?)?', name='course_start_time'),
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  period?: number(description='课程时长', example='100', name='period'),
+}
+
+model CreateOrganizationCourseResponse = {
+  courseId?: string(description='课程did', example='0001', name='course_id'),
+}
+
+/**
+ * Description: 发布课程
+ * Summary: 发布课程
+ */
+async function createOrganizationCourse(request: CreateOrganizationCourseRequest): CreateOrganizationCourseResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createOrganizationCourseEx(request, runtime);
+}
+
+/**
+ * Description: 发布课程
+ * Summary: 发布课程
+ */
+async function createOrganizationCourseEx(request: CreateOrganizationCourseRequest, runtime: Util.RuntimeOptions): CreateOrganizationCourseResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.course.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateOrganizationRequest = {
+  orgCode?: string(description='企业码', example='ANT', maxLength=64, name='org_code'),
+  orgName?: string(description='企业名称', example='蚂蚁金服', maxLength=64, name='org_name'),
+}
+
+model CreateOrganizationResponse = {
+  orgDid?: string(description='企业did', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', name='org_did'),
+}
+
+/**
+ * Description: 创建企业
+ * Summary: 创建企业
+ */
+async function createOrganization(request: CreateOrganizationRequest): CreateOrganizationResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createOrganizationEx(request, runtime);
+}
+
+/**
+ * Description: 创建企业
+ * Summary: 创建企业
+ */
+async function createOrganizationEx(request: CreateOrganizationRequest, runtime: Util.RuntimeOptions): CreateOrganizationResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateOrganizationUserRequest = {
+  orgDid?: string(description='企业id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='org_did'),
+  personDid?: string(description='个人id', example='did:mychain:66530b21a9bee783234c442b653e909136629a5a3075be7b4d9ae085782e3d36 ', maxLength=128, name='person_did'),
+  uid?: string(description='机构内部用户工号', example='00001', maxLength=64, name='uid'),
+}
+
+model CreateOrganizationUserResponse = {
+  orgUserId?: string(description='机构内用户id', example='00001', name='org_user_id'),
+}
+
+/**
+ * Description: 企业用户注册
+ * Summary: 企业用户注册
+ */
+async function createOrganizationUser(request: CreateOrganizationUserRequest): CreateOrganizationUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createOrganizationUserEx(request, runtime);
+}
+
+/**
+ * Description: 企业用户注册
+ * Summary: 企业用户注册
+ */
+async function createOrganizationUserEx(request: CreateOrganizationUserRequest, runtime: Util.RuntimeOptions): CreateOrganizationUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.ebc.organization.user.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+

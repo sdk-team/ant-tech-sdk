@@ -1,0 +1,70 @@
+{
+  "scope": "alipaycloud",
+  "name": "EBC",
+  "version": "1.0.0",
+  "main": "./main.tea",
+  "maintainers": [
+    {
+      "name": "Alipay Cloud SDK",
+      "email": "sdk-team@alibabacloud.com"
+    }
+  ],
+  "releases": {
+    "java": "com.aliyun:ebc:1.0.1",
+    "go": "github.com/alipaycloud/EBC/client:v1.0.1",
+    "csharp": "AlipayCloud.SDK.EBC:1.0.1",
+    "ts": "@alipaycloud/ebc:1.0.1",
+    "php": "alipaycloud/ebc:1.0.1",
+    "python": "alipaycloud_sdk_ebc:1.0.1"
+  },
+  "libraries": {
+    "Util": "alibabacloud:Util:*",
+    "RPCUtil": "alibabacloud:RPCUtil:*",
+    "AlipayUtil": "alipaycloud:AlipayUtil:*"
+  },
+  "java": {
+    "package": "com.aliyun.ebc",
+    "packageInfo": {
+      "description": "Alipay Cloud EBC SDK for Java",
+      "url": "https://github.com/alipaycloud",
+      "licenseNmae": "The Apache License, Version 2.0",
+      "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0.txt",
+      "developerId": "alipayproducts",
+      "developerName": "AlipayCloud SDK",
+      "developerEmail": "alipaysdk@alipay.com"
+    }
+  },
+  "csharp": {
+    "className": "Client",
+    "namespace": "Alipaycloud.SDK.EBC",
+    "packageInfo": {
+      "name": "ebc",
+      "title": "alipaycloud-ebc",
+      "description": "Alibaba Cloud EBC SDK Library for .NET",
+      "company": "Alibaba Cloud, Inc"
+    }
+  },
+  "php": {
+    "package": "Alipaycloud.EBC",
+    "clientName": "Client",
+    "packageInfo": {
+      "name": "alipaycloud/ebc",
+      "desc": "Alipay Cloud SDK Library for PHP",
+      "github": "https://github.com/alipaycloud",
+      "files": {
+        "LICENSE": "../LICENSE"
+      }
+    }
+  },
+  "python": {
+    "package": "alipaycloud_sdk_ebc",
+    "clientName": "client",
+    "packageInfo": {
+      "name": "alipaycloud_ebc",
+      "desc": "Alipay Cloud EBC SDK Library for Python",
+      "github": "https://github.com/alipaycloud",
+      "author": "Alipay Cloud SDK",
+      "email": "sdk-team@alibabacloud.com"
+    }
+  }
+}
