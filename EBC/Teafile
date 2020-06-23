@@ -14,8 +14,8 @@
     "go": "github.com/alipaycloud/EBC/client:v1.0.1",
     "csharp": "AlipayCloud.SDK.EBC:1.0.1",
     "ts": "@alipaycloud/ebc:1.0.1",
-    "php": "alipaycloud/ebc:1.0.1",
-    "python": "alipaycloud_sdk_ebc:1.0.1"
+    "php": "alipaycloud/ebc:1.0.0",
+    "python": "alipaycloud_sdk_ebc:1.0.0"
   },
   "libraries": {
     "Util": "alibabacloud:Util:*",
