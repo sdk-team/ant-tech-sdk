@@ -1,0 +1,3101 @@
+import AlipayUtil;
+import Util;
+import RPCUtil;
+
+type @endpoint = string
+type @regionId = string
+type @accessKeyId = string
+type @accessKeySecret = string
+type @protocol = string
+type @userAgent = string
+type @readTimeout = number
+type @connectTimeout = number
+type @httpProxy = string
+type @httpsProxy = string
+type @socks5Proxy = string
+type @socks5NetWork = string
+type @noProxy = string
+type @maxIdleConns = number
+type @authToken = string
+type @tenant = string
+type @workspace = string
+
+/**
+ * Model for initing client
+ */
+model Config {
+  accessKeyId?: string(description='accesskey id',default=''),
+  accessKeySecret?: string(description='accesskey secret',default=''),
+  authToken?: string(description='auth token',default=''),
+  protocol?: string(description='http protocol',example='http',default='http'),
+  regionId?: string(description='region id',example='cn-hangzhou',default=''),
+  readTimeout?: number(description='read timeout',example='10',default=''),
+  connectTimeout?: number(description='connect timeout',example='10',default=''),
+  httpProxy?: string(description='http proxy',example='http://localhost',default=''),
+  httpsProxy?: string(description='https proxy',example='https://localhost',default=''),
+  endpoint?: string(description='endpoint',example='cs.aliyuncs.com',default=''),
+  noProxy?: string(description='proxy white list',example='http://localhost',default=''),
+  maxIdleConns?: number(description='max idle conns',example='3',default=''),
+  userAgent?: string(description='user agent',example='Alibabacloud/1',default=''),
+  socks5Proxy?: string(description='socks5 proxy',default=''),
+  socks5NetWork?: string(description='socks5 network',example='TCP',default=''),
+  tenant?: string(description='当需要调用API操作指定租户的资源时， 需要提供目标租户的ID',default='',example='MYBKC1CN'),
+  workspace?: string(description='当需要调用API操作指定工作空间的资源时， 需要提供目标工作空间的ID',example='Prod',default=''),
+}
+
+/**
+ * Init client with Config
+ * @param config config contains the necessary information to create a client
+ */
+init(config: Config) {
+  if (Util.isUnset(config)) {
+    throw {
+      code = 'ParameterMissing',
+      message = '\'config\' can not be unset'
+    };
+  }
+
+  @accessKeyId = config.accessKeyId;
+  @accessKeySecret = config.accessKeySecret;
+  @tenant = config.tenant;
+  @workspace = config.workspace;
+  @endpoint = config.endpoint;
+  @authToken = config.authToken;
+  @protocol = config.protocol;
+  @regionId = config.regionId;
+  @userAgent = config.userAgent;
+  @readTimeout = config.readTimeout;
+  @connectTimeout = config.connectTimeout;
+  @httpProxy = config.httpProxy;
+  @httpsProxy = config.httpsProxy;
+  @noProxy = config.noProxy;
+  @socks5Proxy = config.socks5Proxy;
+  @socks5NetWork = config.socks5NetWork;
+  @maxIdleConns = config.maxIdleConns;
+}
+
+/**
+ * Encapsulate the request and invoke the network
+ * @param action api name
+ * @param protocol http or https
+ * @param method e.g. GET
+ * @param pathname pathname of every api
+ * @param request which contains request params
+ * @param runtime which controls some details of call api, such as retry times
+ * @return the response
+ */
+api doRequest(action: string, protocol: string, method: string, pathname: string, request: object, runtime: Util.RuntimeOptions): object {
+  __request.protocol = Util.defaultString(@protocol, protocol);
+  __request.method = method;
+  __request.pathname = pathname;
+  __request.query = {
+    method = action,
+    version = '1.0',
+    sign_type = 'HmacSHA1',
+    req_time = AlipayUtil.getTimestamp(),
+    req_msg_id = Util.getNonce(),
+  };
+
+  if (!Util.empty(@tenant)) {
+    __request.query.tenant = @tenant;
+  }
+
+  if (!Util.empty(@workspace)) {
+    __request.query.workspace = @workspace;
+  }
+
+  if (!Util.empty(@authToken)) {
+    __request.query.auth_token = @authToken;
+  } else {
+    __request.query.access_key = @accessKeyId;
+  }
+
+  __request.headers = {
+    host = @endpoint,
+    user-agent = getUserAgent()
+  };
+
+  var tmp = Util.anyifyMapValue(RPCUtil.query(request));
+  __request.body = Util.toFormString(tmp);
+  __request.headers.content-type = 'application/x-www-form-urlencoded';
+
+  var signedParam = {
+    ...__request.query,
+    ...RPCUtil.query(request)
+  };
+  __request.query.sign = AlipayUtil.getSignature(signedParam, @accessKeySecret);
+} returns {
+  var obj = Util.readAsJSON(__response.body);
+  var res = Util.assertAsMap(obj);
+  var resp = Util.assertAsMap(res.response);
+
+  if (AlipayUtil.hasError(res)) {
+    throw {
+      message = resp.result_msg,
+      data = resp,
+      code = resp.result_code
+    };
+  }
+  return resp;
+} runtime {
+  timeouted = 'retry',
+  readTimeout = Util.defaultNumber(runtime.readTimeout, @readTimeout),
+  connectTimeout = Util.defaultNumber(runtime.connectTimeout, @connectTimeout),
+  httpProxy = Util.defaultString(runtime.httpProxy, @httpProxy),
+  httpsProxy = Util.defaultString(runtime.httpsProxy, @httpsProxy),
+  noProxy = Util.defaultString(runtime.noProxy, @noProxy),
+  maxIdleConns = Util.defaultNumber(runtime.maxIdleConns, @maxIdleConns),
+  retry = {
+    retryable = runtime.autoretry,
+    maxAttempts = Util.defaultNumber(runtime.maxAttempts, 3)
+  },
+  backoff = {
+    policy = Util.defaultString(runtime.backoffPolicy, 'no'),
+    period = Util.defaultNumber(runtime.backoffPeriod, 1)
+  },
+  ignoreSSL = runtime.ignoreSSL
+}
+
+/**
+ * Get user agent
+ * @return user agent
+ */
+function getUserAgent(): string {
+  var userAgent = Util.getUserAgent(@userAgent);
+  return userAgent;
+}
+
+model LogEntry {
+  from?: string(name='from', example='d3936015f0f4676a03a1bdea8b6fc24390f9f147853c5398e989dd30afae643b', description='交易发起方'),
+  logData?: string(name='log_data', example='82067b2254223a302c225622...//可通过蚂蚁提供的区块日志解析工具分析交易内容', description='log信息'),
+  to?: string(name='to', example='f76abaaa47c23bd27d0e77bc625773df9776d2f273b569d1074d89643fb73feb', description='交易接受方'),
+  topics?: [ string ](name='topics', example='call_contract', description='交易topic'),
+}
+
+model Extension {
+  key?: long(name='key', example='1', description='key'),
+  value?: string(name='value', example='value', description='value'),
+}
+
+model UserPrice {
+  price?: string(name='price', example='10.0000', description='具体价格'),
+  ratio?: string(name='ratio', example='1', description='相对比例'),
+  snapshotTenantPrice?: string(name='snapshot_tenant_price', example='10.0000', description='对租户价格(需要和当前生效价格匹配)'),
+  userPriceType?: long(name='user_price_type', example='0 | 1', description='价格类型(数值/比例)'),
+}
+
+model BlockTransaction {
+  data?: string(name='data', example='05656e747279a2...', description='交易信息'),
+  extension?: [ Extension ](name='extension', example='', description='交易扩展信息'),
+  from?: string(name='from', example='d3936015f0f4676a03a1bdea8b6fc24390f9f147853c5398e989dd30afae643b', description='交易发起方'),
+  gas?: long(name='gas', example='1234', description='交易gas消耗'),
+  groupId?: string(name='group_id', example='0000000000000000000000000000000000000000', description='分组id，暂时没用'),
+  hash?: string(name='hash', example='7f73437ea59ff23cf1050d5511fe8d94ed5ec8eab8f9175f7f3ffcbb05b374ee', description='交易哈希'),
+  nonce?: string(name='nonce', example='13945910133563405517', description='交易随机数'),
+  period?: long(name='period', example='1583989453107', description='交易时间'),
+  signature?: [ string ](name='signature', example='c75f573981b3a1fcadea90cd530f5802e0...', description='交易签名'),
+  timestamp?: long(name='timestamp', example='1583989453107', description='交易时间戳'),
+  to?: string(name='to', example='f76abaaa47c23bd27d0e77bc625773df9776d2f273b569d1074d89643fb73feb', description='交易接收方'),
+  type?: long(name='type', example='11', description='2'),
+  value?: long(name='value', example='0', description='交易转账金额'),
+  version?: long(name='version', example='2', description='2'),
+}
+
+model BlockReceipt {
+  gasUsed?: long(name='gas_used', example='9640671', description='使用的gas数量'),
+  logs?: [ LogEntry ](name='logs', example='', description='收据log信息'),
+  output?: string(name='output', example='00', description='交易输出'),
+  result?: long(name='result', example='0', description='交易结果，0为成功'),
+}
+
+model BlockBody {
+  consensusProof?: string(name='consensus_proof', example='f8f2f8c9b841f8...', description='区块共识证明(HEX)'),
+  receiptList?: [ BlockReceipt ](name='receipt_list', example='', description='区块中交易回执列表'),
+  transactionList?: [ BlockTransaction ](name='transaction_list', example='', description='区块中交易列表'),
+}
+
+model Provision {
+  creditMax?: string(name='credit_max', example='99999999.0000', description='授信上限'),
+  creditUsed?: string(name='credit_used', example='0.0000', description='授信已使用'),
+  currency?: string(name='currency', example='CNY', description='币种'),
+  debit?: string(name='debit', example='99999999.0000', description='余额'),
+}
+
+model EquityExtInfo {
+  limitPerDayUsed?: long(name='limit_per_day_used', example='10', description='指定兑换日限制已使用'),
+  limitPerMonthUsed?: long(name='limit_per_month_used', example='100', description='指定兑换月限制已使用'),
+  openToTenantId?: string(name='open_to_tenant_id', example='ID', description='权益开放的租户ID'),
+  targetDate?: string(name='target_date', example='12121212', description='指定日期'),
+  tenantPrice?: string(name='tenant_price', example='10.0000', description='权益对租户价格'),
+  tenantUserPrice?: UserPrice(name='tenant_user_price', example='10.00', description='授权给租户用户的价格'),
+}
+
+model EquityDetail {
+  description?: string(name='description', example='description', description='权益描述'),
+  descImages?: string(name='desc_images', example='OSS1;OSS2', description='权益描述图片OSS地址（分号;分隔）'),
+  equityId?: string(name='equity_id', example='7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', description='权益ID'),
+  equityName?: string(name='equity_name', example='权益1', description='权益名称'),
+  equityType?: string(name='equity_type', example='0200050002', description='权益类型'),
+  equityValue?: string(name='equity_value', example='20.00', description='权益面值(元)'),
+  images?: string(name='images', example='OSS1;OSS2', description='权益主图片OSS地址（分号;分隔）'),
+  price?: string(name='price', example='20.00', description='对客价(元)'),
+  skuId?: string(name='sku_id', example='20200407050700000000404', description='权益SKU'),
+}
+
+model AssetExtInfo {
+  dispenseBalance?: string(name='dispense_balance', example='1000', description='发放账户余额'),
+  dispenseTenantId?: string(name='dispense_tenant_id', example='tenantid', description='发放账户归属租户ID'),
+  userCreditBalance?: string(name='user_credit_balance', example='100', description='用户账户余额'),
+  userId?: string(name='user_id', example='user001', description='用户ID'),
+}
+
+model BlockHeader {
+  gasUsed?: long(name='gas_used', example='12743895', description='gas总消耗'),
+  hash?: string(name='hash', example='1344a095ae43e0dbb82e1986a5ab1357a5108d7bf9066f8e52f4b8bf1260a06f', description='十六进制区块哈希值'),
+  logBloom?: string(name='log_bloom', example='000000000000000400000...', description='log bloom'),
+  number?: long(name='number', example='1920810', description='区块高度'),
+  parentHash?: string(name='parent_hash', example='daf5181a24e6e712988751bd9f808636bd5f291ec7cbef6193198b629d6452b0', description='十六进制区块父hash'),
+  receiptRoot?: string(name='receipt_root', example='ac7ec491ed17d6995ce0a919b7be65e431ba4dc9072d485496207e1f83ed5779', description='交易单据树根'),
+  stateRoot?: string(name='state_root', example='ff0326e45d179e03cd0a077b8cc886935c69b60dde5d7b3961a84bbd4ce4e6be', description='状态树根'),
+  timestamp?: long(name='timestamp', example='1583202479879', description='区块时间戳'),
+  transactionRoot?: string(name='transaction_root', example='12c7314185b21e13cd5c873043214a8b51879a82698bc563aa97cb9a36705713', description='十六进制交易merkle树根'),
+  version?: long(name='version', example='1125904201810178', description='区块版本'),
+}
+
+model Card {
+  calStatus?: long(name='cal_status', example='0', description='计算理论上应该变为的状态'),
+  cardId?: string(name='card_id', example='JFB120041613102200071', description='卡密ID'),
+  chargeTime?: long(name='charge_time', example='1587014822623', description='充值时间'),
+  countOfMinUnit?: long(name='count_of_min_unit', example='100', description='数量'),
+  createTime?: long(name='create_time', example='1587013822623', description='卡密创建时间'),
+  createTxHash?: string(name='create_tx_hash', example='3dae198527e4303c2b187fe3946ec12017c15ae1e76614aaeeb30ad8c07c1c68', description='创建卡密时的交易hash'),
+  desensitizedUid?: string(name='desensitized_uid', example='149******92', description='脱敏手机信息'),
+  extInfo?: string(name='ext_info', example='{"card_description":"AlipayPoints"}', description='附加信息'),
+  minUnit?: long(name='min_unit', example='1', description='最小单位数量'),
+  publicKey?: string(name='public_key', example='04fe488725194810b28f7741f4df60af5bb1011b6282ce0efd7456fba41725391ac8ba4ce794c6a3171b14251ccffb0a8b1f0dbe5038993c27c747ecd4a11692a4', description='公钥'),
+  status?: long(name='status', example='1', description='状态'),
+  uidPublicKey?: string(name='uid_public_key', example='04f3bef4d273366bfb2182854707d2d8e71e059e2b6a7b5fc056a1e06b7f1ed673f7bfc6cbf22295e00dac35638379b5e4df39fc9d32acd2565144cc21b094de77', description='公钥信息'),
+  validAfter?: long(name='valid_after', example='1587013821641', description='卡密在该时间后有效'),
+  validBefore?: long(name='valid_before', example='1602604799000', description='卡密在该时间前有效'),
+  validDays?: long(name='valid_days', example='180', description='有效天数'),
+  value?: long(name='value', example='100', description='价值'),
+  version?: long(name='version', example='0', description='卡密版本'),
+}
+
+model SKUItem {
+  rate?: string(name='rate', example='0.006', description='集分宝销售费率'),
+  skuAmount?: long(name='sku_amount', example='100', description='包含集分宝个数'),
+  skuId?: string(name='sku_id', example='da0af02dea0918', description='商品ID'),
+  skuName?: string(name='sku_name', example='区块链集分宝200', description='商品名称'),
+  skuPrice?: string(name='sku_price', example='2.00', description='商品面值（单位：元）'),
+  status?: long(name='status', example='0', description='商品状态：0可用，1冻结，2下线'),
+}
+
+model MultiURL {
+  normal?: string(name='normal', example='https://myexchange.oss-cn-hangzhou.aliyuncs.com/1259371fc8f77d3fa0.jpeg?Expires=1581625032&OSSAccessKeyId=LTAI4FooxCSL7w8Minh2oJqc&Signature=REH79oOsx5MK4%2BEGcFmaSXq6XsM%3D', description='上传的图片正常大小'),
+  style150?: string(name='style_150', example='https://myexchange.oss-cn-hangzhou.aliyuncs.com/1259371fc8f77d3fa0.jpeg?Expires=1581625032&OSSAccessKeyId=LTAI4FooxCSL7w8Minh2oJqc&Signature=A1f%2FtKicryG8VOG%2BpAdSyUNLmCs%3D&x-oss-process=style%2Fscale_image_150', description='style150'),
+  style200?: string(name='style_200', example='https://myexchange.oss-cn-hangzhou.aliyuncs.com/1259371fc8f77d3fa0.jpeg?Expires=1581625032&OSSAccessKeyId=LTAI4FooxCSL7w8Minh2oJqc&Signature=LoirSoaWnC5bhIP%2BWZT0OqLlSy4%3D&x-oss-process=style%2Fscale_image_200', description='style200'),
+  style70?: string(name='style_70', example='https://myexchange.oss-cn-hangzhou.aliyuncs.com/1259371fc8f77d3fa0.jpeg?Expires=1581625032&OSSAccessKeyId=LTAI4FooxCSL7w8Minh2oJqc&Signature=QxDxjfSFlpjxB7nKdYr%2BISoMPCI%3D&x-oss-process=style%2Fscale_image_70', description='style70'),
+}
+
+model EInstruction {
+  assetId?: string(name='asset_id', example='assetID', description='资产ID'),
+  assetRate?: string(name='asset_rate', example='1', description='资产的汇率'),
+  deductAssetAmount?: string(name='deduct_asset_amount', example='100', description='资产扣减数量(单位:个)'),
+  deductCreditAmount?: string(name='deduct_credit_amount', example='100.0000', description='扣减商户备付金授信额(单位:元)'),
+  deductDebitAmount?: string(name='deduct_debit_amount', example='10.0000', description='扣减商户备付金余额(单位:元)'),
+  deductTenantId?: string(name='deduct_tenant_id', example='id', description='被扣减备付金的租户ID'),
+  equityId?: string(name='equity_id', example='equity', description='权益ID'),
+  equityName?: string(name='equity_name', example='card01', description='权益名称'),
+  equityPrice?: string(name='equity_price', example='10.0000', description='权益对用户价格(单位:元)'),
+  equityValue?: string(name='equity_value', example='10.0000', description='权益面值(单位:元)'),
+  memo?: string(name='memo', example='memo', description='附言Deliver/Complete/OutOfStore/WriteOff)'),
+  optTenantId?: string(name='opt_tenant_id', example='JHG', description='发起操作的租户ID'),
+  outTxId?: string(name='out_tx_id', example='1246354', description='业务交易ID'),
+  status?: long(name='status', example='1', description='对换单流水状态：
+0        // 权益兑换单创建
+1        // 权益兑换单接单
+2        // 权益兑换单发货
+3        // 权益兑换单确认收货
+4        // 权益兑换单缺货
+5        // 权益兑换单核销'),
+  tenantId?: string(name='tenant_id', example='id', description='权益归属租户ID'),
+  timeStamp?: long(name='time_stamp', example='123456', description='交易时间戳'),
+  type?: long(name='type', example='0', description='兑换类型(商户身份/用户身份)'),
+  userId?: string(name='user_id', example='userid', description='用户身份兑换/商户兑换的受益用户'),
+}
+
+model APIWhiteListInfo {
+  chainId?: string(name='chain_id', example='antdao', description='链ID'),
+  extension?: string(name='extension', example='extension', description='扩展字段'),
+  level?: long(name='level', example='0', description='权限级别，暂时不用'),
+  tenantId?: string(name='tenant_id', example='OKIJUHYG', description='租户ID'),
+  updateTime?: string(name='update_time', example='20200425204555', description='更新时间'),
+}
+
+model Transaction {
+  data?: string(name='data', example='05656e...5337d', description='交易数据，转换位十六进制'),
+  from?: string(name='from', example='288ca9e665e93dc47fb424412eb4614695ab139b8866f32b45242363a1a16fb4', description='卡密管理员链上ID，64位十六进制。'),
+  hash?: string(name='hash', example='7f73437ea59ff23cf1050d5511fe8d94ed5ec8eab8f9175f7f3ffcbb05b374ee', description='交易hash，十六进制编码'),
+  nonce?: long(name='nonce', example='11066299148144480681', description='交易随机数'),
+  period?: long(name='period', example='0', description='交易时间'),
+  publicKey?: string(name='public_key', example='0447ef0595c9949df2abd487c2b989ef7a70...26643c8db78f447a7', description='from账户对应的公钥，128位十六进制。'),
+  signature?: string(name='signature', example='c75f573981b3a1fcadea90cd530f5802e03276a8a9e9dd9b8eca8f00b83e398220a4ddbc530f37bcfd51d727394357807f3f7b70e525d9ce1a3aec59093e5ec801', description='交易签名，十六进制编码'),
+  timestamp?: long(name='timestamp', example='1583989453110', description='交易时间戳'),
+  to?: string(name='to', example='471aa820085ecb3db37508fb0944590448522b5e3836c6abf39ad3540226aa62', description='交易目标地址，64位十六进制。'),
+}
+
+model DiscreteValue {
+  sortId?: long(name='sort_id', example='1', description='序号'),
+  text?: string(name='text', example='测试链1-人民币账户', description='文本信息'),
+  value?: string(name='value', example='chainID1-CNY', description='文本值'),
+}
+
+model Equity {
+  adminId?: string(name='admin_id', example='ed7b3acb718eef475454e973b8bac06c5feb1b7ea62f91bc8fab6a5e7cc3c061', description='权益管理员ID'),
+  authType?: long(name='auth_type', example='0', description='权益授权类型'),
+  currency?: string(name='currency', example='CNY', description='权益锚定币种'),
+  defaultPrice?: string(name='default_price', example='10.0000', description='权益默认价格'),
+  description?: string(name='description', example='FDCard', description='权益描述'),
+  descImages?: string(name='desc_images', example='oss1;oss2', description='权益描述图片OSS地址 分号分隔'),
+  equityExtInfo?: EquityExtInfo(name='equity_ext_info', example='', description='权益附属信息'),
+  equityId?: string(name='equity_id', example='146bfee42fbc8d05f6c26eebf12f8306ea0df1e48d61bc29ba9b523ed0a6e628', description='权益ID'),
+  equityName?: string(name='equity_name', example='FDCardtest', description='权益名称'),
+  equityType?: string(name='equity_type', example='1', description='权益类型; 0积分,1卡券, 2实物'),
+  images?: string(name='images', example='oss://myexchange/1259371fc8f77d37aab22d949ea51f4982fea55dfb6d130facf32dd6d4257fa0.jpeg', description='权益主图片OSS地址 分号;分隔'),
+  isPublic?: boolean(name='is_public', example='true, false', description='是否为公开权益'),
+  limitPerMerchantAndDay?: long(name='limit_per_merchant_and_day', example='100', description='商户每日兑换上限'),
+  limitPerMerchantAndMonth?: long(name='limit_per_merchant_and_month', example='1000', description='商户每月兑换上限'),
+  limitPerUserAndDay?: long(name='limit_per_user_and_day', example='10', description='用户每日兑换上限'),
+  limitPerUserAndMonth?: long(name='limit_per_user_and_month', example='100', description='用户每月兑换上限'),
+  memo?: string(name='memo', example='memo', description='附言'),
+  status?: long(name='status', example='0', description='权益状态'),
+  tenantId?: string(name='tenant_id', example='ZEJEZKUA', description='租户ID'),
+  totalCount?: string(name='total_count', example='1000000', description='权益库存'),
+  useValidNotAfter?: long(name='use_valid_not_after', example='1612926693000', description='权益使用有效期右闭区间'),
+  useValidNotBefore?: long(name='use_valid_not_before', example='1581304293000', description='权益使用有效期左闭区间'),
+  validNotAfter?: long(name='valid_not_after', example='1612926693000', description='权益兑换有效期右闭区间'),
+  validNotBefore?: long(name='valid_not_before', example='1581304293000', description='权益兑换有效期左闭区间'),
+  value?: string(name='value', example='10.0000', description='权益面值'),
+}
+
+model Block {
+  body?: BlockBody(name='body', example='', description='区块体'),
+  header?: BlockHeader(name='header', example='', description='区块头'),
+}
+
+model OpenedEquity {
+  adminId?: string(name='admin_id', example='288ca9e665e93dc47fb424412eb4614695ab139b8866f32b45242363a1a16fb4', description='商户管理员ID'),
+  authType?: string(name='auth_type', example='0', description='授权类型'),
+  currency?: string(name='currency', example='RMB', description='币种'),
+  defaultPrice?: string(name='default_price', example='21.21', description='默认价格'),
+  description?: string(name='description', example='description', description='权益详情'),
+  descImages?: string(name='desc_images', example='oss3;oss4', description='权益详情图片'),
+  equityD?: string(name='equity_d', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', description='权益ID'),
+  equityName?: string(name='equity_name', example='卡券158375105', description='权益名称'),
+  equityType?: long(name='equity_type', example='1234', description='权益类型'),
+  images?: string(name='images', example='oss1;0ss2;0ss3', description='权益主图片'),
+  isPublic?: boolean(name='is_public', example='true, false', description='是否是公开权益'),
+  limitPerMerchantAndDay?: long(name='limit_per_merchant_and_day', example='999999999', description='每日商户对换限制'),
+  limitPerMerchantAndMonth?: long(name='limit_per_merchant_and_month', example='9999999999999', description='每月商户对换限制'),
+  limitPerUserAndDay?: long(name='limit_per_user_and_day', example='999999999', description='每日用户对换限制'),
+  limitPerUserAndMonth?: long(name='limit_per_user_and_month', example='99999', description='每月用户对换限制'),
+  memo?: string(name='memo', example='新的权益', description='权益附言'),
+  openToTenantId?: string(name='open_to_tenant_id', example='tenant', description='被授权的租户ID'),
+  status?: long(name='status', example='0', description='权益状态'),
+  tenantId?: string(name='tenant_id', example='BRS', description='租户ID'),
+  tenantPrice?: string(name='tenant_price', example='21.21', description='授权价格'),
+  totalCount?: string(name='total_count', example='9999', description='库存'),
+  useValidNotAfter?: long(name='use_valid_not_after', example='1612926693000', description='可用右区间'),
+  useValidNotBefore?: long(name='use_valid_not_before', example='1581304293000', description='可用左区间'),
+  validNotAfter?: long(name='valid_not_after', example='1612926693000', description='有效右区间'),
+  validNotBefore?: long(name='valid_not_before', example='1581304293000', description='有效左时间'),
+  value?: string(name='value', example='21.21', description='价值'),
+}
+
+model Asset {
+  adminId?: string(name='admin_id', example='f46857d8', description='资产管理员ID'),
+  assetExtInfo?: AssetExtInfo(name='asset_ext_info', example='', description='资产附属信息'),
+  assetId?: string(name='asset_id', example='CT::Asset001', description='资产ID'),
+  assetName?: string(name='asset_name', example='CTPoints', description='资产名称'),
+  assetRate?: string(name='asset_rate', example='1000.0000', description='资产汇率'),
+  currency?: string(name='currency', example='CNY', description='币种'),
+  issueAccountBalance?: string(name='issue_account_balance', example='0.000', description='发行账户余额'),
+  overdueRecoveryAccountBalance?: string(name='overdue_recovery_account_balance', example='0.000', description='过期回收账户余额'),
+  receivePaymentAccountBalance?: string(name='receive_payment_account_balance', example='0.000', description='支付收款账户余额'),
+  relayAccountBalance?: string(name='relay_account_balance', example='0.000', description='中继账户余额'),
+  status?: long(name='status', example='0', description='资产状态'),
+  tenantId?: string(name='tenant_id', example='ORE', description='租户ID'),
+  totalIssueBalance?: string(name='total_issue_balance', example='11111111.0000', description='资产总发行量'),
+}
+
+model DelegateRelationInfo {
+  delegatedTenantId?: string(name='delegated_tenant_id', example='WAESRDTF', description='被代理的租户ID'),
+  extension?: string(name='extension', example='extension', description='扩展字段'),
+  status?: boolean(name='status', example='true', description='状态'),
+  tenantId?: string(name='tenant_id', example='OKIJUHYG', description='被授权的租户ID'),
+  updateTime?: string(name='update_time', example='20200327153541', description='更新时间'),
+}
+
+model MerchantBudget {
+  budgetCode?: string(name='budget_code', example='1234567', description='预算库代码'),
+  budgetDesc?: string(name='budget_desc', example='budget', description='预算库描述'),
+  budgetEndTime?: string(name='budget_end_time', example='2020-06-01-20:20:20', description='预算库截止时间'),
+  budgetStartTime?: string(name='budget_start_time', example='2020-06-01-20:20:20', description='预算库启用时间'),
+  pointLibCode?: string(name='point_lib_code', example='1234546', description='积分库代码'),
+}
+
+model ExchangeableEquityList {
+  endRow?: long(name='end_row', example='10', description='页面上数据在总数据中的结束位置（第几个数据）'),
+  equityList?: [ EquityDetail ](name='equity_list', example='', description='权益信息列表'),
+  firstPage?: long(name='first_page', example='1', description='第一页页码'),
+  hasNextPage?: boolean(name='has_next_page', example='true, false', description='是否有下一页'),
+  hasPreviousPage?: boolean(name='has_previous_page', example='true, false', description='是否有前一页'),
+  isFirstPage?: boolean(name='is_first_page', example='true, false', description='是否第一页'),
+  isLastPage?: boolean(name='is_last_page', example='true, false', description='是否最后一页'),
+  lastPage?: long(name='last_page', example='2', description='最后一页页码'),
+  nextPage?: long(name='next_page', example='2', description='下一页页码'),
+  orderBy?: string(name='order_by', example='desc', description='排序规则'),
+  pages?: long(name='pages', example='2', description='可兑换的权益总页数'),
+  pageNumber?: long(name='page_number', example='1', description='当前页码'),
+  pageSize?: long(name='page_size', example='10', description='页面大小'),
+  prePage?: long(name='pre_page', example='0', description='前一页页码'),
+  size?: long(name='size', example='10', description='页面中实际数量'),
+  startRow?: long(name='start_row', example='1', description='页面上数据在总数据中的开始位置（第几个数据）'),
+  total?: long(name='total', example='15', description='可兑换的权益总数'),
+}
+
+model UserPriceEquity {
+  adminId?: string(name='admin_id', example='288ca9e665e93dc47fb424412eb4614695ab139b8866f32b45242363a1a16fb4', description='权益提供商商户ID'),
+  authType?: long(name='auth_type', example='0', description='授权类型'),
+  currency?: string(name='currency', example='USD', description='币种'),
+  defaultPrice?: string(name='default_price', example='1.21', description='默认价格'),
+  description?: string(name='description', example='description', description='权益描述'),
+  descImages?: string(name='desc_images', example='oss004;oss005;oss006', description='权益描述图片'),
+  equityD?: string(name='equity_d', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', description='权益ID'),
+  equityName?: string(name='equity_name', example='卡券15837', description='权益名称'),
+  equityType?: long(name='equity_type', example='1', description='权益类型'),
+  images?: string(name='images', example='oss001;oss002;oss003', description='权益主图片'),
+  isPublic?: boolean(name='is_public', example='true, false', description='是否公开权益'),
+  limitPerMerchantAndDay?: long(name='limit_per_merchant_and_day', example='999999999999', description='商户每日兑换上线'),
+  limitPerMerchantAndMonth?: long(name='limit_per_merchant_and_month', example='9999999999999999', description='商户每月兑换上线'),
+  limitPerUserAndDay?: long(name='limit_per_user_and_day', example='999999999', description='用户每日兑换上线'),
+  limitPerUserAndMonth?: long(name='limit_per_user_and_month', example='999999999', description='用户每月兑换上限'),
+  memo?: string(name='memo', example='这是权益', description='权益附言信息'),
+  openToTenantId?: string(name='open_to_tenant_id', example='tenantid', description='授权的租户ID'),
+  price?: string(name='price', example='1.21', description='用户价格'),
+  ratio?: string(name='ratio', example='1.1', description='用户价格比例'),
+  snapshotTenantPrice?: string(name='snapshot_tenant_price', example='1.11', description='快照租户价格'),
+  status?: long(name='status', example='0', description='权益状态'),
+  tenantId?: string(name='tenant_id', example='ABC', description='权益提供商租户ID'),
+  totalCount?: string(name='total_count', example='9999999999', description='权益库存'),
+  userPriceType?: long(name='user_price_type', example='0', description='用户价格类型'),
+  useValidNotAfter?: long(name='use_valid_not_after', example='1612926693000', description='可用右区间'),
+  useValidNotBefore?: long(name='use_valid_not_before', example='1581304293000', description='可用左区间'),
+  validNotAfter?: long(name='valid_not_after', example='1612926693000', description='有效右区间'),
+  validNotBefore?: long(name='valid_not_before', example='1581304293000', description='有效左区间'),
+  value?: string(name='value', example='1.21', description='价值'),
+}
+
+model Merchant {
+  adminId?: string(name='admin_id', example='ed7b3acb718eef475454e973b8b', description='商户管理员ID'),
+  description?: string(name='description', example='商户描述', description='商户描述'),
+  did?: string(name='did', example='did:mychain:ct', description='商户分布式身份ID'),
+  fundManagerId?: string(name='fund_manager_id', example='b7ecd55bde0481bfc8c972b7ef', description='资金管理员ID'),
+  isAssetIssuer?: boolean(name='is_asset_issuer', example='true, false', description='是否可以发行资产'),
+  isEquityConsumer?: boolean(name='is_equity_consumer', example='true, false', description='是否可以采购权益'),
+  isEquityProvider?: boolean(name='is_equity_provider', example='true, false', description='是否可以发行权益'),
+  profitLossBalance?: string(name='profit_loss_balance', example='0.0050000000000000', description='商户的损益账户'),
+  provision?: Provision(name='provision', example='', description='备付金数据'),
+  status?: long(name='status', example='0 | 1 | 2', description='商户状态: 0可用, 1下线, 2冻结'),
+  tenantId?: string(name='tenant_id', example='DBYG', description='租户ID'),
+}
+
+model User {
+  did?: string(name='did', example='did', description='用户分布式身份ID'),
+  localId?: string(name='local_id', example='user01', description='用户的链外身份ID'),
+  pk?: string(name='pk', example='3280b948a7fa8525c0fbfd47d1df75d7a7ee9f3baedd6964565b42f461dd86732717c4bc4c8203ea2b9b1aeef7b148644babba3c0cd6927c4c0964919f590c6c', description='用户公钥'),
+  tenantId?: string(name='tenant_id', example='GIUGUIYF', description='租户ID'),
+  userId?: string(name='user_id', example='331f9b0922f940f464d4b94b5628180408ac305b7fc72d3e40f5b7727d0702fb', description='用户ID'),
+  vc?: string(name='vc', example='vc', description='用户VC'),
+}
+
+model ExecCardForbiddenRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardForbiddenResponse = {
+}
+
+/**
+ * Description: 风控禁用卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-风控禁用卡密
+ */
+async function execCardForbidden(request: ExecCardForbiddenRequest): ExecCardForbiddenResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardForbiddenEx(request, runtime);
+}
+
+/**
+ * Description: 风控禁用卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-风控禁用卡密
+ */
+async function execCardForbiddenEx(request: ExecCardForbiddenRequest, runtime: Util.RuntimeOptions): ExecCardForbiddenResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.forbidden.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMypointsOrderinstructionRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='prod', name='env'),
+  orderNo?: string(description='业务幂等号', example='S20200707123456', name='order_no'),
+  skuId?: string(description='SKU ID', example='53462386abc367343', name='sku_id'),
+}
+
+model QueryMypointsOrderinstructionResponse = {
+  bizId?: string(description='业务请求单号', example='S20200707123456', name='biz_id'),
+  budgetCode?: string(description='商家的预算库代码', example='BudgetCode12345', name='budget_code'),
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='prod', name='env'),
+  extendInfo?: string(description='扩展信息', example='扩展信息', name='extend_info'),
+  orderId?: string(description='订单ID(env+chain_id+tenant_id+sku_id+biz_id)', example='prodmypointsHUIJUHYGSKU0001S20200618123', name='order_id'),
+  skuAmount?: number(description='包含集分宝数量(个)', example='100', name='sku_amount'),
+  skuId?: string(description='SKU ID', example='523645376abc5346576', name='sku_id'),
+  skuValue?: string(description='面值', example='1', name='sku_value'),
+  status?: number(description='状态(0:初始,1:失败可重试,2:失败不可重试,3:成功)', example='0', name='status'),
+  tenantId?: string(description='商家在金融云的租户ID', example='IJUHYGUH', name='tenant_id'),
+}
+
+/**
+ * Description: 查询下单流水信息
+ * Summary: 数字商品服务-商品服务-商品下单流水查询
+ */
+async function queryMypointsOrderinstruction(request: QueryMypointsOrderinstructionRequest): QueryMypointsOrderinstructionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMypointsOrderinstructionEx(request, runtime);
+}
+
+/**
+ * Description: 查询下单流水信息
+ * Summary: 数字商品服务-商品服务-商品下单流水查询
+ */
+async function queryMypointsOrderinstructionEx(request: QueryMypointsOrderinstructionRequest, runtime: Util.RuntimeOptions): QueryMypointsOrderinstructionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.orderinstruction.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisBlockRequest = {
+  blockNumber?: number(description='区块高度', example='123', name='block_number'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantIds?: [ string ](description='代理查询区块信息，传入代理租户需有代理权限。接口会返回调用者和被代理租户能查看的所有交易信息。', example='', name='delegated_tenant_ids'),
+}
+
+model QueryBlockanalysisBlockResponse = {
+  block?: Block(description='区块信息', example='', name='block'),
+  blockNumber?: number(description='区块高度', example='1423675', name='block_number'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  filteredTxCount?: number(description='过滤后的交易数量', example='1', name='filtered_tx_count'),
+  totalTxCount?: number(description='区块中交易总数', example='3', name='total_tx_count'),
+}
+
+/**
+ * Description: 获取特定高度的区块信息
+ * Summary: 数字商品服务-拉块服务-获取区块信息
+ */
+async function queryBlockanalysisBlock(request: QueryBlockanalysisBlockRequest): QueryBlockanalysisBlockResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisBlockEx(request, runtime);
+}
+
+/**
+ * Description: 获取特定高度的区块信息
+ * Summary: 数字商品服务-拉块服务-获取区块信息
+ */
+async function queryBlockanalysisBlockEx(request: QueryBlockanalysisBlockRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisBlockResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.block.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityDefaultpriceRequest = {
+  amount?: string(description='价格', example='1.21', name='amount'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='269347253876', name='out_tx_id'),
+}
+
+model UpdateEquityDefaultpriceResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新商品价格
+ * Summary: 数字商品服务-商品服务-更新商品价格
+ */
+async function updateEquityDefaultprice(request: UpdateEquityDefaultpriceRequest): UpdateEquityDefaultpriceResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityDefaultpriceEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新商品价格
+ * Summary: 数字商品服务-商品服务-更新商品价格
+ */
+async function updateEquityDefaultpriceEx(request: UpdateEquityDefaultpriceRequest, runtime: Util.RuntimeOptions): UpdateEquityDefaultpriceResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.defaultprice.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateMerchantProvisionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  currency?: string(description='备付金账户币种', example='CNY', name='currency'),
+  optTenantId?: string(description='要创建备付金账户的租户ID', example='UHGYTUYH', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID，确保幂等', example='1234567890', name='out_tx_id'),
+}
+
+model CreateMerchantProvisionResponse = {
+}
+
+/**
+ * Description: 创建备付金账户，合约管理员权限
+ * Summary: 数字商品服务-商户管理-创建备付金账户
+ */
+async function createMerchantProvision(request: CreateMerchantProvisionRequest): CreateMerchantProvisionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createMerchantProvisionEx(request, runtime);
+}
+
+/**
+ * Description: 创建备付金账户，合约管理员权限
+ * Summary: 数字商品服务-商户管理-创建备付金账户
+ */
+async function createMerchantProvisionEx(request: CreateMerchantProvisionRequest, runtime: Util.RuntimeOptions): CreateMerchantProvisionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.provision.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecMypointsOrderskuRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='loadtest/pre/gray/prod', name='env'),
+  orderNo?: string(description='业务幂等号', example='S20200707123456', name='order_no'),
+  phoneNumber?: string(description='手机号', example='15809890000', name='phone_number'),
+  preOrderId?: string(description='预下单号', example='PREORDER001', name='pre_order_id'),
+  skuId?: string(description='商品ID', example='164723847238746', name='sku_id'),
+}
+
+model ExecMypointsOrderskuResponse = {
+  cardId?: string(description='卡密ID', example='eb18cb6bfcb5eeb1b004d6885f76d5576a1b94649c766e498e83db88504cd5e1', name='card_id'),
+  cardValue?: number(description='集分宝卡密的面值(单位:个)', example='100', name='card_value'),
+  orderNo?: string(description='业务幂等ID', example='S20200707123456', name='order_no'),
+  url?: string(description='短链接', example='https://render.alipay.com/p/c/jfb_gif?', name='url'),
+}
+
+/**
+ * Description: 商品下单
+ * Summary: 数字商品服务-商品服务-商品下单
+ */
+async function execMypointsOrdersku(request: ExecMypointsOrderskuRequest): ExecMypointsOrderskuResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execMypointsOrderskuEx(request, runtime);
+}
+
+/**
+ * Description: 商品下单
+ * Summary: 数字商品服务-商品服务-商品下单
+ */
+async function execMypointsOrderskuEx(request: ExecMypointsOrderskuRequest, runtime: Util.RuntimeOptions): ExecMypointsOrderskuResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.ordersku.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model SetMerchantProvisionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  creditMaxAmount?: string(description='新的授信上限（单位：元）', example='5000', name='credit_max_amount'),
+  creditUsedAmount?: string(description='新的授信已使用数额（单位：元）', example='1000', name='credit_used_amount'),
+  currency?: string(description='币种', example='CNY', name='currency'),
+  debitAmount?: string(description='新的备付金余额（单位：元）', example='10000', name='debit_amount'),
+  optTenantId?: string(description='要设置备付金的商户租户ID', example='tenantid', name='opt_tenant_id'),
+  originalCreditMaxAmount?: string(description='初始的授信上限（单位：元）', example='4000', name='original_credit_max_amount'),
+  originalCreditUsedAmount?: string(description='初始的授信已使用数额（单位：元）', example='2000', name='original_credit_used_amount'),
+  originalDebitAmount?: string(description='初始的备付金余额（单位：元）', example='11111', name='original_debit_amount'),
+  outTxId?: string(description='外部交易ID（确保幂等）', example='123456', name='out_tx_id'),
+}
+
+model SetMerchantProvisionResponse = {
+}
+
+/**
+ * Description: 设置备付金金额（CAS接口）
+ * Summary: 数字商品服务-商户管理-设置备付金金额
+ */
+async function setMerchantProvision(request: SetMerchantProvisionRequest): SetMerchantProvisionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return setMerchantProvisionEx(request, runtime);
+}
+
+/**
+ * Description: 设置备付金金额（CAS接口）
+ * Summary: 数字商品服务-商户管理-设置备付金金额
+ */
+async function setMerchantProvisionEx(request: SetMerchantProvisionRequest, runtime: Util.RuntimeOptions): SetMerchantProvisionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.provision.set', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisDelegaterelationRequest = {
+  delegatedTenantId?: string(description='被代理的租户ID', example='OKIJUHYG', name='delegated_tenant_id'),
+}
+
+model QueryBlockanalysisDelegaterelationResponse = {
+  delegateRelationInfos?: [ DelegateRelationInfo ](description='代理授权关系信息', example='', name='delegate_relation_infos'),
+}
+
+/**
+ * Description: 查询租户的授权代理权限
+ * Summary: 数字商品服务-拉块服务-代理权限查询
+ */
+async function queryBlockanalysisDelegaterelation(request: QueryBlockanalysisDelegaterelationRequest): QueryBlockanalysisDelegaterelationResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisDelegaterelationEx(request, runtime);
+}
+
+/**
+ * Description: 查询租户的授权代理权限
+ * Summary: 数字商品服务-拉块服务-代理权限查询
+ */
+async function queryBlockanalysisDelegaterelationEx(request: QueryBlockanalysisDelegaterelationRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisDelegaterelationResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.delegaterelation.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardQueryRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardQueryResponse = {
+  card?: Card(description='卡密信息对象', example='{"card_id":""...}', name='card'),
+}
+
+/**
+ * Description: 查询卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-查询卡密
+ */
+async function execCardQuery(request: ExecCardQueryRequest): ExecCardQueryResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardQueryEx(request, runtime);
+}
+
+/**
+ * Description: 查询卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-查询卡密
+ */
+async function execCardQueryEx(request: ExecCardQueryRequest, runtime: Util.RuntimeOptions): ExecCardQueryResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.query.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityExchangelimitRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', name='equity_id'),
+  limitPerMerchantAndDay?: number(description='商户每日兑换上限', example='1000', name='limit_per_merchant_and_day'),
+  limitPerMerchantAndMontn?: number(description='商户每月兑换上限', example='10000', name='limit_per_merchant_and_montn'),
+  limitPerUserAndDay?: number(description='用户每日兑换上限', example='10', name='limit_per_user_and_day'),
+  limitPerUserAndMonth?: number(description='用户每月兑换上限', example='100', name='limit_per_user_and_month'),
+  outTxId?: string(description='外部交易ID', example='26384236487', name='out_tx_id'),
+}
+
+model UpdateEquityExchangelimitResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新兑换限制规则
+ * Summary: 数字商品服务-商品服务-更新兑换限制规则
+ */
+async function updateEquityExchangelimit(request: UpdateEquityExchangelimitRequest): UpdateEquityExchangelimitResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityExchangelimitEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新兑换限制规则
+ * Summary: 数字商品服务-商品服务-更新兑换限制规则
+ */
+async function updateEquityExchangelimitEx(request: UpdateEquityExchangelimitRequest, runtime: Util.RuntimeOptions): UpdateEquityExchangelimitResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.exchangelimit.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMypointsPreorderinstructionRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='prod', name='env'),
+  orderNo?: string(description='业务幂等ID', example='S20200707123456', name='order_no'),
+  skuId?: string(description='商品ID', example='8236548efdg', name='sku_id'),
+}
+
+model QueryMypointsPreorderinstructionResponse = {
+  bizId?: string(description='业务请求单号', example='S20200707123456', name='biz_id'),
+  budgetCode?: string(description='商家的预算库代码', example='BudgetCode12345', name='budget_code'),
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='prod', name='env'),
+  extendInfo?: string(description='扩展信息', example='扩展信息', name='extend_info'),
+  pid?: string(description='商家在支付宝域的标识', example='53246237452364', name='pid'),
+  pointLibCode?: string(description='商家的积分库代码', example='PointsLibCode123456', name='point_lib_code'),
+  preOrderId?: string(description='集分宝SKU预下单ID', example='PREORDER001', name='pre_order_id'),
+  remainCount?: number(description='订单中剩余的可下单商品数量', example='10', name='remain_count'),
+  skuAmount?: number(description='包含集分宝数量(个)', example='100', name='sku_amount'),
+  skuId?: string(description='集分宝SKU的ID', example='5236457abc26378', name='sku_id'),
+  skuValue?: string(description='SKU面值', example='1', name='sku_value'),
+  status?: number(description='流水状态(0初始状态,1采购成功,2调拨成功)', example='0', name='status'),
+  tenantId?: string(description='商户在金融云的租户ID', example='JIUHYGYU', name='tenant_id'),
+  totalAmount?: number(description='总下单集分宝数量', example='10000', name='total_amount'),
+  totalCount?: number(description='集分宝SKU的预下单数量', example='100', name='total_count'),
+  totalValue?: string(description='总下单金额', example='100', name='total_value'),
+}
+
+/**
+ * Description: 查询集分宝SKU的预下单流水记录
+ * Summary: 数字商品服务-商品服务-预下单流水查询
+ */
+async function queryMypointsPreorderinstruction(request: QueryMypointsPreorderinstructionRequest): QueryMypointsPreorderinstructionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMypointsPreorderinstructionEx(request, runtime);
+}
+
+/**
+ * Description: 查询集分宝SKU的预下单流水记录
+ * Summary: 数字商品服务-商品服务-预下单流水查询
+ */
+async function queryMypointsPreorderinstructionEx(request: QueryMypointsPreorderinstructionRequest, runtime: Util.RuntimeOptions): QueryMypointsPreorderinstructionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.preorderinstruction.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateBlockanalysisDelegaterelationRequest = {
+  delegatedTenantId?: string(description='被代理的租户ID', example='IKAHGTUH', name='delegated_tenant_id'),
+  optTenantId?: string(description='代理租户ID', example='HUYOIUJN', name='opt_tenant_id'),
+  optType?: string(description='操作类型，ADD表示添加，SUB表示撤销', example='ADD | SUB', name='opt_type'),
+}
+
+model UpdateBlockanalysisDelegaterelationResponse = {
+}
+
+/**
+ * Description: 设置租户的授权代理权限。赋予 opt_tenant_id 代理 delegated_tenant_id 调用接口的权限，见可代理的接口详情单。
+ * Summary: 数字商品服务-拉块服务-设置代理权限
+ */
+async function updateBlockanalysisDelegaterelation(request: UpdateBlockanalysisDelegaterelationRequest): UpdateBlockanalysisDelegaterelationResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateBlockanalysisDelegaterelationEx(request, runtime);
+}
+
+/**
+ * Description: 设置租户的授权代理权限。赋予 opt_tenant_id 代理 delegated_tenant_id 调用接口的权限，见可代理的接口详情单。
+ * Summary: 数字商品服务-拉块服务-设置代理权限
+ */
+async function updateBlockanalysisDelegaterelationEx(request: UpdateBlockanalysisDelegaterelationRequest, runtime: Util.RuntimeOptions): UpdateBlockanalysisDelegaterelationResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.delegaterelation.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateMerchantProvisionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  creditMaxAmount?: string(description='更新授信上限', example='1000', name='credit_max_amount'),
+  creditUsedAmount?: string(description='更新授信已使用数额', example='100', name='credit_used_amount'),
+  currency?: string(description='币种', example='CNY', name='currency'),
+  debitAmount?: string(description='更新余额', example='1000', name='debit_amount'),
+  optTenantId?: string(description='要设置备付金的商户租户ID', example='tenantID', name='opt_tenant_id'),
+  optType?: string(description='操作类型，ADD表示增加，SUB表示减少', example='ADD | SUB', name='opt_type'),
+  outTxId?: string(description='外部交易ID', example='12345', name='out_tx_id'),
+}
+
+model UpdateMerchantProvisionResponse = {
+}
+
+/**
+ * Description: 更新商户的备付金金额，由资金管理员操作
+ * Summary: 数字商品服务-商户管理-更新备付金金额
+ */
+async function updateMerchantProvision(request: UpdateMerchantProvisionRequest): UpdateMerchantProvisionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateMerchantProvisionEx(request, runtime);
+}
+
+/**
+ * Description: 更新商户的备付金金额，由资金管理员操作
+ * Summary: 数字商品服务-商户管理-更新备付金金额
+ */
+async function updateMerchantProvisionEx(request: UpdateMerchantProvisionRequest, runtime: Util.RuntimeOptions): UpdateMerchantProvisionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.provision.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model FreezeEquityRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品ID', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='2368453876', name='out_tx_id'),
+}
+
+model FreezeEquityResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至baas.antdao.equity.status.update
+冻结权益
+ * Summary: 数字商品服务-商品服务-冻结商品
+ */
+async function freezeEquity(request: FreezeEquityRequest): FreezeEquityResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return freezeEquityEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至baas.antdao.equity.status.update
+冻结权益
+ * Summary: 数字商品服务-商品服务-冻结商品
+ */
+async function freezeEquityEx(request: FreezeEquityRequest, runtime: Util.RuntimeOptions): FreezeEquityResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.freeze', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardWriteoffRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardWriteoffResponse = {
+}
+
+/**
+ * Description: 核销卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-核销卡密
+ */
+async function execCardWriteoff(request: ExecCardWriteoffRequest): ExecCardWriteoffResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardWriteoffEx(request, runtime);
+}
+
+/**
+ * Description: 核销卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-核销卡密
+ */
+async function execCardWriteoffEx(request: ExecCardWriteoffRequest, runtime: Util.RuntimeOptions): ExecCardWriteoffResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.writeoff.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMerchantUserRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  localId?: string(description='商户管理下的用户ID', example='user01', name='local_id'),
+}
+
+model QueryMerchantUserResponse = {
+  user?: User(description='用户完整信息
+{
+            "tenant_id": "ZKUA",
+            "user_id": "331f9b0922f940f464d4b94b5628180408ac305b7fc72d3e40f5b7727d0702fb",
+            "local_id": "user01",
+            "did": "",
+            "vc": "",
+            "pk": "3280b948a7fa8525c0fbfd47d1df75d7a7ee9f3baedd6964565b42f461dd86732717c4bc4c8203ea2b9b1aeef7b148644babba3c0cd6927c4c0964919f590c6c"
+        }
+', example='', name='user'),
+}
+
+/**
+ * Description: 查询调用商户下的用户信息
+ * Summary: 数字商品服务-商户管理-查询用户信息
+ */
+async function queryMerchantUser(request: QueryMerchantUserRequest): QueryMerchantUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMerchantUserEx(request, runtime);
+}
+
+/**
+ * Description: 查询调用商户下的用户信息
+ * Summary: 数字商品服务-商户管理-查询用户信息
+ */
+async function queryMerchantUserEx(request: QueryMerchantUserRequest, runtime: Util.RuntimeOptions): QueryMerchantUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.user.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockLastblocknumberRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+}
+
+model QueryBlockLastblocknumberResponse = {
+  lastBlockNumber?: number(description='最新区块高度', example='1234', name='last_block_number'),
+}
+
+/**
+ * Description: 获取区块链最新区块高度
+ * Summary: 数字商品服务-拉块服务-获取最新区块高度
+ */
+async function queryBlockLastblocknumber(request: QueryBlockLastblocknumberRequest): QueryBlockLastblocknumberResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockLastblocknumberEx(request, runtime);
+}
+
+/**
+ * Description: 获取区块链最新区块高度
+ * Summary: 数字商品服务-拉块服务-获取最新区块高度
+ */
+async function queryBlockLastblocknumberEx(request: QueryBlockLastblocknumberRequest, runtime: Util.RuntimeOptions): QueryBlockLastblocknumberResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.block.lastblocknumber.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryEquityInstructionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理该租户调用接口，会使用该租户发送交易链上查询信息', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='000c7312bf8ba777ccbbfb0df8e965cd5fa67a72bb6f142136b96dc0b2364f19', name='equity_id'),
+  optTenantId?: string(description='发起操作的租户ID', example='tenantABGG', name='opt_tenant_id'),
+  originTxId?: string(description='要查询的流水交易号', example='2534653987ugfg', name='origin_tx_id'),
+}
+
+model QueryEquityInstructionResponse = {
+  instruction?: EInstruction(description='权益流水json
+type 兑换类型：0商户身份，1用户身份。
+status 流水状态：0创建，1接单，3发货，4确认收货，5缺货，6核销', example='', name='instruction'),
+}
+
+/**
+ * Description: 根据商品兑换流水交易号查询商品兑换流水详情
+ * Summary: 数字商品服务-商品服务-查询商品兑换流水
+ */
+async function queryEquityInstruction(request: QueryEquityInstructionRequest): QueryEquityInstructionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryEquityInstructionEx(request, runtime);
+}
+
+/**
+ * Description: 根据商品兑换流水交易号查询商品兑换流水详情
+ * Summary: 数字商品服务-商品服务-查询商品兑换流水
+ */
+async function queryEquityInstructionEx(request: QueryEquityInstructionRequest, runtime: Util.RuntimeOptions): QueryEquityInstructionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.instruction.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMerchantProvisionsRequest = {
+  businessAction?: string(description='行为', example='loadAssetAccount', name='business_action'),
+  optTenantId?: string(description='要查询的租户ID', example='opt_tenant_id', name='opt_tenant_id'),
+  productCode?: string(description='产品编码', example='BLOCKCHAIN', name='product_code'),
+}
+
+model QueryMerchantProvisionsResponse = {
+  discreteValues?: [ DiscreteValue ](description='租户的备付金列表信息', example='', name='discrete_values'),
+}
+
+/**
+ * Description: 查询租户的备付金列表
+ * Summary: 数字商品服务-商户管理-查租户备付金列表
+ */
+async function queryMerchantProvisions(request: QueryMerchantProvisionsRequest): QueryMerchantProvisionsResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMerchantProvisionsEx(request, runtime);
+}
+
+/**
+ * Description: 查询租户的备付金列表
+ * Summary: 数字商品服务-商户管理-查租户备付金列表
+ */
+async function queryMerchantProvisionsEx(request: QueryMerchantProvisionsRequest, runtime: Util.RuntimeOptions): QueryMerchantProvisionsResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.provisions.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryConfigDelegaterelationRequest = {
+  delegatedTenantId?: string(description='被代理的租户ID', example='OKIJUHYG', name='delegated_tenant_id'),
+}
+
+model QueryConfigDelegaterelationResponse = {
+  delegateRelationInfos?: [ DelegateRelationInfo ](description='代理授权关系信息', example='', name='delegate_relation_infos'),
+}
+
+/**
+ * Description: 查询租户的授权代理权限
+ * Summary: 数字商品服务-管理服务-代理权限查询
+ */
+async function queryConfigDelegaterelation(request: QueryConfigDelegaterelationRequest): QueryConfigDelegaterelationResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryConfigDelegaterelationEx(request, runtime);
+}
+
+/**
+ * Description: 查询租户的授权代理权限
+ * Summary: 数字商品服务-管理服务-代理权限查询
+ */
+async function queryConfigDelegaterelationEx(request: QueryConfigDelegaterelationRequest, runtime: Util.RuntimeOptions): QueryConfigDelegaterelationResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.config.delegaterelation.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeByuserRequest = {
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  assetIssuer?: string(description='资产发行方', example='issuerID', name='asset_issuer'),
+  assetRate?: string(description='期望资产汇率', example='1.00', name='asset_rate'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='43253623548365698765798...', name='equity_id'),
+  equityProvider?: string(description='权益商品提供方ID', example='VFTDDTHU', name='equity_provider'),
+  equityRate?: string(description='期望权益汇率', example='1.1', name='equity_rate'),
+  memo?: string(description='兑换时必要信息，敏感信息需加密。兑换时必要的信息，敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='memo', name='memo'),
+  outTxId?: string(description='外部交易ID', example='523675483625463858376', name='out_tx_id'),
+  userId?: string(description='用户ID', example='user002', name='user_id'),
+}
+
+model ExecExchangeByuserResponse = {
+}
+
+/**
+ * Description: 用户身份发起兑换
+ * Summary: 数字商品服务-兑换服务-用户身份发起兑换
+ */
+async function execExchangeByuser(request: ExecExchangeByuserRequest): ExecExchangeByuserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeByuserEx(request, runtime);
+}
+
+/**
+ * Description: 用户身份发起兑换
+ * Summary: 数字商品服务-兑换服务-用户身份发起兑换
+ */
+async function execExchangeByuserEx(request: ExecExchangeByuserRequest, runtime: Util.RuntimeOptions): ExecExchangeByuserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.byuser.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMypointsMerchantbalanceRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  env?: string(description='环境标识', example='loadtest/pre/gray/prod', name='env'),
+}
+
+model QueryMypointsMerchantbalanceResponse = {
+  budgetAvailableBalance?: number(description='积分库可用余额', example='1000', name='budget_available_balance'),
+  budgetBalance?: number(description='预算库余额', example='1000000', name='budget_balance'),
+  budgetCode?: string(description='预算库代码', example='budget_code', name='budget_code'),
+  pid?: string(description='商户的支付宝商家ID', example='537645238548', name='pid'),
+  pointLibBalance?: number(description='积分库余额', example='100000', name='point_lib_balance'),
+  pointLibCode?: string(description='积分库代码', example='point_lib_code', name='point_lib_code'),
+  tenantId?: string(description='商户的金融云租户ID', example='GHUYTRFD', name='tenant_id'),
+}
+
+/**
+ * Description: 查询商户的积分库和预算库
+ * Summary: 数字商品服务-商品服务-积分预算库查询
+ */
+async function queryMypointsMerchantbalance(request: QueryMypointsMerchantbalanceRequest): QueryMypointsMerchantbalanceResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMypointsMerchantbalanceEx(request, runtime);
+}
+
+/**
+ * Description: 查询商户的积分库和预算库
+ * Summary: 数字商品服务-商品服务-积分预算库查询
+ */
+async function queryMypointsMerchantbalanceEx(request: QueryMypointsMerchantbalanceRequest, runtime: Util.RuntimeOptions): QueryMypointsMerchantbalanceResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.merchantbalance.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockRequest = {
+  blockNumber?: number(description='区块链高度', example='1234', name='block_number'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+}
+
+model QueryBlockResponse = {
+  block?: Block(description='区块信息', example='', name='block'),
+  blockNumber?: number(description='区块高度', example='12345', name='block_number'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  filteredTxCount?: number(description='过滤后的交易数量', example='2', name='filtered_tx_count'),
+  totalTxCount?: number(description='区块中交易总数', example='4', name='total_tx_count'),
+}
+
+/**
+ * Description: 获取特定高度的区块信息
+ * Summary: 数字商品服务-拉块服务-获取区块信息
+ */
+async function queryBlock(request: QueryBlockRequest): QueryBlockResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockEx(request, runtime);
+}
+
+/**
+ * Description: 获取特定高度的区块信息
+ * Summary: 数字商品服务-拉块服务-获取区块信息
+ */
+async function queryBlockEx(request: QueryBlockRequest, runtime: Util.RuntimeOptions): QueryBlockResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.block.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMerchantRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  currency?: string(description='币种', example='CNY', name='currency'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='HGDGCG', name='delegated_tenant_id'),
+}
+
+model QueryMerchantResponse = {
+  blockNumber?: number(description='查询商户信息时的区块高度', example='7855839', name='block_number'),
+  merchant?: Merchant(description='商户完整信息
+{
+            "tenant_id": "Z",
+            "did": "did:mychain:ct",
+            "admin_id": "ed7b3acb718e2f91bc8fab6a5e7cc3c061",
+            "fund_manager_id": "b7ecd55bde04827b3e611a741d",
+            "description": "SK",
+            "is_equity_provider": true,
+            "is_equity_consumer": true,
+            "is_asset_issuer": true,
+            "status": 0,
+            "provision": {
+                "currency": "CNY",
+                "debit": "99999999.0000",
+                "credit_max": "99999999.0000",
+                "credit_used": "0.0000"
+            }
+        }', example='', name='merchant'),
+}
+
+/**
+ * Description: 查询管理员创建的商户信息（可查询自身的商户信息）
+ * Summary: 数字商品服务-商户管理-查询商户信息
+ */
+async function queryMerchant(request: QueryMerchantRequest): QueryMerchantResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMerchantEx(request, runtime);
+}
+
+/**
+ * Description: 查询管理员创建的商户信息（可查询自身的商户信息）
+ * Summary: 数字商品服务-商户管理-查询商户信息
+ */
+async function queryMerchantEx(request: QueryMerchantRequest, runtime: Util.RuntimeOptions): QueryMerchantResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateConfigDelegaterelationRequest = {
+  delegatedTenantId?: string(description='被代理的租户ID', example='IKAHGTUH', name='delegated_tenant_id'),
+  optTenantId?: string(description='代理租户ID', example='HUYOIUJN', name='opt_tenant_id'),
+  optType?: string(description='操作类型，ADD表示添加，SUB表示撤销', example='ADD | SUB', name='opt_type'),
+}
+
+model UpdateConfigDelegaterelationResponse = {
+}
+
+/**
+ * Description: 设置租户的授权代理权限。赋予 opt_tenant_id 代理 delegated_tenant_id 调用接口的权限，见可代理的接口详情单。
+ * Summary: 数字商品服务-管理服务-设置代理权限
+ */
+async function updateConfigDelegaterelation(request: UpdateConfigDelegaterelationRequest): UpdateConfigDelegaterelationResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateConfigDelegaterelationEx(request, runtime);
+}
+
+/**
+ * Description: 设置租户的授权代理权限。赋予 opt_tenant_id 代理 delegated_tenant_id 调用接口的权限，见可代理的接口详情单。
+ * Summary: 数字商品服务-管理服务-设置代理权限
+ */
+async function updateConfigDelegaterelationEx(request: UpdateConfigDelegaterelationRequest, runtime: Util.RuntimeOptions): UpdateConfigDelegaterelationResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.config.delegaterelation.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecPkiDecryptRequest = {
+  accountId?: string(description='商户管理员/其用户的链上账户ID', example='b4d773a23dd3a46ed3a8589996cd950c67fd396785538214a095004ae3e94c64', name='account_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  encryptedContent?: string(description='密文（base64）', example='base64 密文', name='encrypted_content'),
+}
+
+model ExecPkiDecryptResponse = {
+  content?: string(description='明文', example='MDAyNzY0NzE0MzcxNg==\\r\n', name='content'),
+}
+
+/**
+ * Description: ECC解密算法接口
+ * Summary: 数字商品服务-密钥管理-私钥解密
+ */
+async function execPkiDecrypt(request: ExecPkiDecryptRequest): ExecPkiDecryptResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execPkiDecryptEx(request, runtime);
+}
+
+/**
+ * Description: ECC解密算法接口
+ * Summary: 数字商品服务-密钥管理-私钥解密
+ */
+async function execPkiDecryptEx(request: ExecPkiDecryptRequest, runtime: Util.RuntimeOptions): ExecPkiDecryptResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.pki.decrypt.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisUserpriceupdatedequitiesRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  count?: number(description='每页数量', example='10', name='count'),
+  page?: number(description='页码', example='1', name='page'),
+}
+
+model QueryBlockanalysisUserpriceupdatedequitiesResponse = {
+  equities?: [ UserPriceEquity ](description='权益商品信息详细信息list', example='', name='equities'),
+}
+
+/**
+ * Description: 查询已设置过用户价格的有效权益商品信息
+ * Summary: 数字商品服务-拉块服务-已设用户价格商品
+ */
+async function queryBlockanalysisUserpriceupdatedequities(request: QueryBlockanalysisUserpriceupdatedequitiesRequest): QueryBlockanalysisUserpriceupdatedequitiesResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisUserpriceupdatedequitiesEx(request, runtime);
+}
+
+/**
+ * Description: 查询已设置过用户价格的有效权益商品信息
+ * Summary: 数字商品服务-拉块服务-已设用户价格商品
+ */
+async function queryBlockanalysisUserpriceupdatedequitiesEx(request: QueryBlockanalysisUserpriceupdatedequitiesRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisUserpriceupdatedequitiesResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.userpriceupdatedequities.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateMerchantUserRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  did?: string(description='用户的did信息', example='mychain::did::bac56fde5237645', name='did'),
+  localId?: string(description='用户外部ID', example='"user01"', name='local_id'),
+  outTxId?: string(description='外部交易ID', example='5126546354836', name='out_tx_id'),
+}
+
+model CreateMerchantUserResponse = {
+}
+
+/**
+ * Description: 创建商户管理下的用户
+ * Summary: 数字商品服务-商户管理-商户创建用户
+ */
+async function createMerchantUser(request: CreateMerchantUserRequest): CreateMerchantUserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createMerchantUserEx(request, runtime);
+}
+
+/**
+ * Description: 创建商户管理下的用户
+ * Summary: 数字商品服务-商户管理-商户创建用户
+ */
+async function createMerchantUserEx(request: CreateMerchantUserRequest, runtime: Util.RuntimeOptions): CreateMerchantUserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.user.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryConfigWhitelistRequest = {
+  chainId?: string(description='查询链的白名单信息', example='antdao', name='chain_id'),
+  tenantId?: string(description='查询该租户的白名单信息', example='租户ID', name='tenant_id'),
+}
+
+model QueryConfigWhitelistResponse = {
+  whiteList?: [ APIWhiteListInfo ](description='接口白名单信息', example='', name='white_list'),
+}
+
+/**
+ * Description: 查询接口访问白名单信息
+ * Summary: 数字商品服务-拉块服务-查询接口白名单
+ */
+async function queryConfigWhitelist(request: QueryConfigWhitelistRequest): QueryConfigWhitelistResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryConfigWhitelistEx(request, runtime);
+}
+
+/**
+ * Description: 查询接口访问白名单信息
+ * Summary: 数字商品服务-拉块服务-查询接口白名单
+ */
+async function queryConfigWhitelistEx(request: QueryConfigWhitelistRequest, runtime: Util.RuntimeOptions): QueryConfigWhitelistResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.config.whitelist.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecPkiEncryptRequest = {
+  accountId?: string(description='商户管理员/其用户的链上账户ID', example='b4d773a23dd3a46ed3a8589996cd950c67fd396785538214a095004ae3e94c64', name='account_id'),
+  content?: string(description='明文（base64编码）', example='aGVsbG8gbXlrbXM=', name='content'),
+  optTenantId?: string(description='商户管理员/其用户归属的租户ID', example='tenant001', name='opt_tenant_id'),
+}
+
+model ExecPkiEncryptResponse = {
+  encryptedContent?: string(description='密文 base64编码 ', example='BETi2OI8DrI73WzqeBKwVgbKSi85UheXLE9gaK26yeDzMtKe9SLsZ...', name='encrypted_content'),
+}
+
+/**
+ * Description: ECC公钥加密接口
+ * Summary: 数字商品服务-密钥管理-公钥加密
+ */
+async function execPkiEncrypt(request: ExecPkiEncryptRequest): ExecPkiEncryptResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execPkiEncryptEx(request, runtime);
+}
+
+/**
+ * Description: ECC公钥加密接口
+ * Summary: 数字商品服务-密钥管理-公钥加密
+ */
+async function execPkiEncryptEx(request: ExecPkiEncryptRequest, runtime: Util.RuntimeOptions): ExecPkiEncryptResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.pki.encrypt.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisWhitelistRequest = {
+  chainId?: string(description='查询链的白名单信息', example='antdao', name='chain_id'),
+  tenantId?: string(description='查询该租户的白名单信息', example='租户ID', name='tenant_id'),
+}
+
+model QueryBlockanalysisWhitelistResponse = {
+  whiteList?: [ APIWhiteListInfo ](description='接口白名单信息', example='', name='white_list'),
+}
+
+/**
+ * Description: 查询接口访问白名单信息
+ * Summary: 数字商品服务-拉块服务-查询接口白名单
+ */
+async function queryBlockanalysisWhitelist(request: QueryBlockanalysisWhitelistRequest): QueryBlockanalysisWhitelistResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisWhitelistEx(request, runtime);
+}
+
+/**
+ * Description: 查询接口访问白名单信息
+ * Summary: 数字商品服务-拉块服务-查询接口白名单
+ */
+async function queryBlockanalysisWhitelistEx(request: QueryBlockanalysisWhitelistRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisWhitelistResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.whitelist.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMerchantExchangeableequitylistRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  pageNumber?: string(description='页码', example='1', name='page_number'),
+  pageSize?: string(description='每页数量（不填默认返回50条数据）', example='10', name='page_size'),
+}
+
+model QueryMerchantExchangeableequitylistResponse = {
+  object?: ExchangeableEquityList(description='可兑换商品信息列表', example='', name='object'),
+}
+
+/**
+ * Description: 只有代理到数字商品管理后台的商户才能查询到信息。查询商户可兑换商品列表
+ * Summary: 数字商品服务-商户管理-查询可兑换商品
+ */
+async function queryMerchantExchangeableequitylist(request: QueryMerchantExchangeableequitylistRequest): QueryMerchantExchangeableequitylistResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMerchantExchangeableequitylistEx(request, runtime);
+}
+
+/**
+ * Description: 只有代理到数字商品管理后台的商户才能查询到信息。查询商户可兑换商品列表
+ * Summary: 数字商品服务-商户管理-查询可兑换商品
+ */
+async function queryMerchantExchangeableequitylistEx(request: QueryMerchantExchangeableequitylistRequest, runtime: Util.RuntimeOptions): QueryMerchantExchangeableequitylistResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.exchangeableequitylist.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model AddEquityCountRequest = {
+  amount?: number(description='权益库存数量', example='1000', name='amount'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equity001', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='12376587', name='out_tx_id'),
+}
+
+model AddEquityCountResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+增加权益库存
+ * Summary: 数字商品服务-商品服务-增加权益库存
+ */
+async function addEquityCount(request: AddEquityCountRequest): AddEquityCountResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return addEquityCountEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+增加权益库存
+ * Summary: 数字商品服务-商品服务-增加权益库存
+ */
+async function addEquityCountEx(request: AddEquityCountRequest, runtime: Util.RuntimeOptions): AddEquityCountResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.count.add', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardChargeresetRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardChargeresetResponse = {
+}
+
+/**
+ * Description: 充值重置卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-充值重置卡密
+ */
+async function execCardChargereset(request: ExecCardChargeresetRequest): ExecCardChargeresetResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardChargeresetEx(request, runtime);
+}
+
+/**
+ * Description: 充值重置卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-充值重置卡密
+ */
+async function execCardChargeresetEx(request: ExecCardChargeresetRequest, runtime: Util.RuntimeOptions): ExecCardChargeresetResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.chargereset.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model GetPkiPublickeyRequest = {
+  accountId?: string(description='商户管理员/其用户的链上账户ID', example='b4d773a23dd3a46ed3a8589996cd950c67fd396785538214a095004ae3e94c64', name='account_id'),
+  optTenantId?: string(description='商户管理员/其用户归属的租户ID', example='tenant002', name='opt_tenant_id'),
+}
+
+model GetPkiPublickeyResponse = {
+  publicKey?: string(description='公钥字符串（base64）', example='3ZIrtYZVkAlluTxKVl95bdmIIpD09RzM9LGoS3v3YO7lTOb0/Md1jJbO7qzm+QUn3S1oTX+BHVQ35jl9Lwgqbw==', name='public_key'),
+}
+
+/**
+ * Description: 获取kms中对应用户的公钥
+ * Summary: 数字商品服务-密钥管理-获取用户公钥
+ */
+async function getPkiPublickey(request: GetPkiPublickeyRequest): GetPkiPublickeyResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return getPkiPublickeyEx(request, runtime);
+}
+
+/**
+ * Description: 获取kms中对应用户的公钥
+ * Summary: 数字商品服务-密钥管理-获取用户公钥
+ */
+async function getPkiPublickeyEx(request: GetPkiPublickeyRequest, runtime: Util.RuntimeOptions): GetPkiPublickeyResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.pki.publickey.get', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateBlockanalysisWhitelistRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  optTenantId?: string(description='租户ID', example='IJKOUYTF', name='opt_tenant_id'),
+  optType?: string(description='操作类型', example='ADD | SUB', name='opt_type'),
+}
+
+model UpdateBlockanalysisWhitelistResponse = {
+}
+
+/**
+ * Description: 设置接口访问白名单。
+ * Summary: 数字商品服务-拉块服务-设置访问白名单
+ */
+async function updateBlockanalysisWhitelist(request: UpdateBlockanalysisWhitelistRequest): UpdateBlockanalysisWhitelistResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateBlockanalysisWhitelistEx(request, runtime);
+}
+
+/**
+ * Description: 设置接口访问白名单。
+ * Summary: 数字商品服务-拉块服务-设置访问白名单
+ */
+async function updateBlockanalysisWhitelistEx(request: UpdateBlockanalysisWhitelistRequest, runtime: Util.RuntimeOptions): UpdateBlockanalysisWhitelistResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.whitelist.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateMerchantFriendRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  friendTenantId?: string(description='友好商户租户ID', example='IHATYSF', name='friend_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='bizID532486', name='out_tx_id'),
+  type?: string(description='更新类型', example='ADD | SUB', name='type'),
+}
+
+model UpdateMerchantFriendResponse = {
+}
+
+/**
+ * Description: 更新商户的友商信息
+ * Summary: 数字商品服务-商户管理-更新商户友商
+ */
+async function updateMerchantFriend(request: UpdateMerchantFriendRequest): UpdateMerchantFriendResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateMerchantFriendEx(request, runtime);
+}
+
+/**
+ * Description: 更新商户的友商信息
+ * Summary: 数字商品服务-商户管理-更新商户友商
+ */
+async function updateMerchantFriendEx(request: UpdateMerchantFriendRequest, runtime: Util.RuntimeOptions): UpdateMerchantFriendResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.friend.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateEquityRequest = {
+  authType?: number(description='授权类型 0 Auto，1Contract', example='0 | 1', name='auth_type'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  currency?: string(description='结算币种', example='CNY', name='currency'),
+  defaultPrice?: string(description='权益价格（单位：元）', example='11', name='default_price'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  description?: string(description='权益商品详情信息', example='card', name='description'),
+  descImages?: string(description='权益商品详情图。上传仅接受链接，请使用OSS存储服务上传图片(;分隔)', example='oss1;oss2;oss3', name='desc_images'),
+  equityName?: string(description='权益商品名称', example='card001', name='equity_name'),
+  equityType?: number(description='权益商品类型：类型为整型（不大于：2147483647），需要进行细分，类型由三部分组成；aabbbbcccc。aa 为大类分类，bbbb 为细项分类（无细项分类时为0000），cccc 为数据格式分类（其中0000表示无格式要求）。请根据实际商品类型填写，具体类型和兑换时数据结构查看文档【https://tech.antfin.com/docs/2/163896】 ', example='0200020001', name='equity_type'),
+  ifPublic?: boolean(description='字段决定权益商品是否全量链上客户可见，当选择权益为false时，需要使用baas.antdao.equity.merchant.open接口增加权益商品可见客户', example='true, false', name='if_public'),
+  images?: string(description='权益商品主图。上传仅接受链接，请使用OSS存储服务上传图片(;分隔)', example='oss1;oss2;oss3', name='images'),
+  limitPerMerchantAndDay?: number(description='商户每日兑换上限', example='1000', name='limit_per_merchant_and_day'),
+  limitPerMerchantAndMonth?: number(description='商户每月兑换上限', example='10000', name='limit_per_merchant_and_month'),
+  limitPerUserAndDay?: number(description='用户每日兑换上限', example='10', name='limit_per_user_and_day'),
+  limitPerUserAndMonth?: number(description='用户每月兑换上限', example='100', name='limit_per_user_and_month'),
+  memo?: string(description='若需要兑换方提供的特殊信息，可增加在备注字段，并要求兑换方是否传入（按照需求方自定义内容信息）
+- 如必须传入证件号，手机号信息，则权益需要通过运营平台审核，非必须采集信息将拒绝上架', example='用户姓名：是|否；用户证件号：是|否', name='memo'),
+  outTxId?: string(description='外部交易ID', example='523864528364', name='out_tx_id'),
+  totalCount?: string(description='权益商品库存数量', example='10000', name='total_count'),
+  useValidNotAfter?: number(description='权益商品使用有效期右闭区间（毫秒）', example='1612926693000', name='use_valid_not_after'),
+  useValidNotBefore?: number(description='权益商品使用有效期左闭区间（毫秒）', example='1581304293000', name='use_valid_not_before'),
+  validNotAfter?: number(description='权益商品兑换有效期右闭区间（毫秒）', example='1612926693000', name='valid_not_after'),
+  validNotBefore?: number(description='权益商品兑换有效期左闭区间（毫秒）', example='1581304293000', name='valid_not_before'),
+  value?: string(description='权益商品面值（单位：元）', example='10', name='value'),
+}
+
+model CreateEquityResponse = {
+  createEquityRequestId?: string(description='请求ID，用于查询异步发布权益结果', example='e7100d1d0d169bfa2cf6d8b66e57a16dd9d633e207e4775c7a392...', name='create_equity_request_id'),
+}
+
+/**
+ * Description: 商品供应商户发布一个商品
+ * Summary: 数字商品服务-商品服务-创建商品
+ */
+async function createEquity(request: CreateEquityRequest): CreateEquityResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createEquityEx(request, runtime);
+}
+
+/**
+ * Description: 商品供应商户发布一个商品
+ * Summary: 数字商品服务-商品服务-创建商品
+ */
+async function createEquityEx(request: CreateEquityRequest, runtime: Util.RuntimeOptions): CreateEquityResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardCreateRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardCreateResponse = {
+  cardId?: string(description='卡密ID', example='cardID', name='card_id'),
+  txHash?: string(description='创建卡密的交易hash', example='abc...def', name='tx_hash'),
+}
+
+/**
+ * Description: 创建卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-创建卡密
+ */
+async function execCardCreate(request: ExecCardCreateRequest): ExecCardCreateResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardCreateEx(request, runtime);
+}
+
+/**
+ * Description: 创建卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-创建卡密
+ */
+async function execCardCreateEx(request: ExecCardCreateRequest, runtime: Util.RuntimeOptions): ExecCardCreateResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.create.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecMypointsPreorderskuRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  count?: number(description='预下单数量', example='10000', name='count'),
+  env?: string(description='环境标识', example='loadtest/pre/gray/prod', name='env'),
+  memo?: string(description='备注', example='预下单', name='memo'),
+  orderNo?: string(description='业务幂等号，商户需要保证每笔订单号唯一', example='S20200707123456', name='order_no'),
+  skuId?: string(description='商品ID', example='21432654236547657', name='sku_id'),
+  totalCost?: string(description='总花费花费(询价接口结果) ', example='1000.06', name='total_cost'),
+}
+
+model ExecMypointsPreorderskuResponse = {
+  count?: number(description='数量', example='10', name='count'),
+  orderNo?: string(description='业务幂等ID', example='JFB1234567', name='order_no'),
+  preOrderId?: string(description='预下单Id', example='PREORDER001', name='pre_order_id'),
+  skuId?: string(description='商品ID', example='2367452386537ab38647', name='sku_id'),
+  totalAmount?: number(description='总集分宝数量(单位:个)', example='100000', name='total_amount'),
+  totalCost?: string(description='总费用', example='100006', name='total_cost'),
+}
+
+/**
+ * Description: 预下单商品
+ * Summary: 数字商品服务-商品服务-商品预下单
+ */
+async function execMypointsPreordersku(request: ExecMypointsPreorderskuRequest): ExecMypointsPreorderskuResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execMypointsPreorderskuEx(request, runtime);
+}
+
+/**
+ * Description: 预下单商品
+ * Summary: 数字商品服务-商品服务-商品预下单
+ */
+async function execMypointsPreorderskuEx(request: ExecMypointsPreorderskuRequest, runtime: Util.RuntimeOptions): ExecMypointsPreorderskuResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.preordersku.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisLastblocknumberRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+}
+
+model QueryBlockanalysisLastblocknumberResponse = {
+  blockNumber?: number(description='区块链最高区块高度', example='123456453', name='block_number'),
+}
+
+/**
+ * Description: 获取最新区块高度
+ * Summary: 数字商品服务-拉块服务-获取最新区块高度
+ */
+async function queryBlockanalysisLastblocknumber(request: QueryBlockanalysisLastblocknumberRequest): QueryBlockanalysisLastblocknumberResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisLastblocknumberEx(request, runtime);
+}
+
+/**
+ * Description: 获取最新区块高度
+ * Summary: 数字商品服务-拉块服务-获取最新区块高度
+ */
+async function queryBlockanalysisLastblocknumberEx(request: QueryBlockanalysisLastblocknumberRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisLastblocknumberResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.lastblocknumber.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model SetMerchantFundmanagerRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  fundManagerTenantId?: string(description='资金管理员所属的租户ID', example='IJUYHTGR', name='fund_manager_tenant_id'),
+  optTenantId?: string(description='要进行资金管理员设置的租户ID', example='ASFGYHDJ', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='1234567890', name='out_tx_id'),
+}
+
+model SetMerchantFundmanagerResponse = {
+}
+
+/**
+ * Description: 设置商户的资金管理员，重要权限，谨慎操作！
+ * Summary: 数字商品服务-商户管理-设置资金管理员
+ */
+async function setMerchantFundmanager(request: SetMerchantFundmanagerRequest): SetMerchantFundmanagerResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return setMerchantFundmanagerEx(request, runtime);
+}
+
+/**
+ * Description: 设置商户的资金管理员，重要权限，谨慎操作！
+ * Summary: 数字商品服务-商户管理-设置资金管理员
+ */
+async function setMerchantFundmanagerEx(request: SetMerchantFundmanagerRequest, runtime: Util.RuntimeOptions): SetMerchantFundmanagerResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.fundmanager.set', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryEquityCreateresultRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  createEquityRequestId?: string(description='异步发布权益结果查询ID', example='234763abc56', name='create_equity_request_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+}
+
+model QueryEquityCreateresultResponse = {
+  equityId?: string(description='权益商品创建成功，返回权益ID', example='2cb1221624c5c5fc56f6d82a103d76cc368f575729a...', name='equity_id'),
+}
+
+/**
+ * Description: 配合异步发布权益接口，查询发布权益商品结果。如查询无结果，判断错误类型，用户需要轮询。
+ * Summary: 数字商品服务-商品服务-发布商品结果查询
+ */
+async function queryEquityCreateresult(request: QueryEquityCreateresultRequest): QueryEquityCreateresultResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryEquityCreateresultEx(request, runtime);
+}
+
+/**
+ * Description: 配合异步发布权益接口，查询发布权益商品结果。如查询无结果，判断错误类型，用户需要轮询。
+ * Summary: 数字商品服务-商品服务-发布商品结果查询
+ */
+async function queryEquityCreateresultEx(request: QueryEquityCreateresultRequest, runtime: Util.RuntimeOptions): QueryEquityCreateresultResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.createresult.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMypointsSkuRequest = {
+  chainId?: string(description='区块链ID', example='antdao', name='chain_id'),
+  env?: string(description='环境标识', example='prod', name='env'),
+}
+
+model QueryMypointsSkuResponse = {
+  skus?: [ SKUItem ](description='商品列表', example='', name='skus'),
+}
+
+/**
+ * Description: 可订购的SKU列表查询
+ * Summary: 数字商品服务-商品服务-商品列表查询
+ */
+async function queryMypointsSku(request: QueryMypointsSkuRequest): QueryMypointsSkuResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMypointsSkuEx(request, runtime);
+}
+
+/**
+ * Description: 可订购的SKU列表查询
+ * Summary: 数字商品服务-商品服务-商品列表查询
+ */
+async function queryMypointsSkuEx(request: QueryMypointsSkuRequest, runtime: Util.RuntimeOptions): QueryMypointsSkuResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.sku.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ConfirmExchangeRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equity', name='equity_id'),
+  memo?: string(description='附言。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='确认接单', name='memo'),
+  originTxId?: string(description='关联交易ID', example='5283645836567', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='12367863487568', name='out_tx_id'),
+}
+
+model ConfirmExchangeResponse = {
+}
+
+/**
+ * Description: 确认接单接口。注意：若确认接单则必须发货！如果不能确保发货则直接调用缺货接口。
+ * Summary: 数字商品服务-兑换服务-确认接单
+ */
+async function confirmExchange(request: ConfirmExchangeRequest): ConfirmExchangeResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return confirmExchangeEx(request, runtime);
+}
+
+/**
+ * Description: 确认接单接口。注意：若确认接单则必须发货！如果不能确保发货则直接调用缺货接口。
+ * Summary: 数字商品服务-兑换服务-确认接单
+ */
+async function confirmExchangeEx(request: ConfirmExchangeRequest, runtime: Util.RuntimeOptions): ConfirmExchangeResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.confirm', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisOpenedequitiesRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  count?: number(description='每页数据量', example='10', name='count'),
+  page?: number(description='页数', example='1', name='page'),
+}
+
+model QueryBlockanalysisOpenedequitiesResponse = {
+  equities?: [ OpenedEquity ](description='权益商品信息详细信息list', example='', name='equities'),
+}
+
+/**
+ * Description: 获取公开的或者已授权的权益商品信息
+ * Summary: 数字商品服务-拉块服务-获取已授权商品
+ */
+async function queryBlockanalysisOpenedequities(request: QueryBlockanalysisOpenedequitiesRequest): QueryBlockanalysisOpenedequitiesResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisOpenedequitiesEx(request, runtime);
+}
+
+/**
+ * Description: 获取公开的或者已授权的权益商品信息
+ * Summary: 数字商品服务-拉块服务-获取已授权商品
+ */
+async function queryBlockanalysisOpenedequitiesEx(request: QueryBlockanalysisOpenedequitiesRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisOpenedequitiesResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.openedequities.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model CreateMerchantRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  description?: string(description='商户描述，不超过2048', example='商户A', name='description'),
+  fundManagerTenantId?: string(description='商户的资金管理员 归属的租户ID', example='ORGJC1CN', name='fund_manager_tenant_id'),
+  ifAssetIssuer?: boolean(description='商户角色，是否是资产发行商', example='true, false', name='if_asset_issuer'),
+  ifEquityConsumer?: boolean(description='商户角色，是否是采购商', example='true, false', name='if_equity_consumer'),
+  ifEquityProvider?: boolean(description='商户角色，是否是供应商', example='true, false', name='if_equity_provider'),
+  optTenantId?: string(description='商户归属的租户ID', example='HNJIUYGH', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID（确保幂等）', example='1234567890', name='out_tx_id'),
+}
+
+model CreateMerchantResponse = {
+}
+
+/**
+ * Description: 创建商户（合约管理员权限）
+ * Summary: 数字商品服务-商户管理-创建商户
+ */
+async function createMerchant(request: CreateMerchantRequest): CreateMerchantResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return createMerchantEx(request, runtime);
+}
+
+/**
+ * Description: 创建商户（合约管理员权限）
+ * Summary: 数字商品服务-商户管理-创建商户
+ */
+async function createMerchantEx(request: CreateMerchantRequest, runtime: Util.RuntimeOptions): CreateMerchantResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.create', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateConfigWhitelistRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  optTenantId?: string(description='租户ID', example='IJKOUYTF', name='opt_tenant_id'),
+  optType?: string(description='操作类型', example='ADD | SUB', name='opt_type'),
+}
+
+model UpdateConfigWhitelistResponse = {
+}
+
+/**
+ * Description: 设置接口访问白名单
+ * Summary: 数字商品服务-管理服务-设置访问白名单
+ */
+async function updateConfigWhitelist(request: UpdateConfigWhitelistRequest): UpdateConfigWhitelistResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateConfigWhitelistEx(request, runtime);
+}
+
+/**
+ * Description: 设置接口访问白名单
+ * Summary: 数字商品服务-管理服务-设置访问白名单
+ */
+async function updateConfigWhitelistEx(request: UpdateConfigWhitelistRequest, runtime: Util.RuntimeOptions): UpdateConfigWhitelistResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.config.whitelist.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardBindnameRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易内容', example='', name='tx'),
+}
+
+model ExecCardBindnameResponse = {
+}
+
+/**
+ * Description: 记名卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-记名卡发行
+ */
+async function execCardBindname(request: ExecCardBindnameRequest): ExecCardBindnameResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardBindnameEx(request, runtime);
+}
+
+/**
+ * Description: 记名卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-记名卡发行
+ */
+async function execCardBindnameEx(request: ExecCardBindnameRequest, runtime: Util.RuntimeOptions): ExecCardBindnameResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.bindname.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMypointsSkufeeRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  count?: number(description='预下单数量', example='100', name='count'),
+  env?: string(description='环境标识(sandbox/prod)', example='sandbox', name='env'),
+  memo?: string(description='备注信息', example='查询费率', name='memo'),
+  orderNo?: string(description='业务幂等号', example='S20200707123345', name='order_no'),
+  skuId?: string(description='商品ID', example='735423584356abc293647', name='sku_id'),
+}
+
+model QueryMypointsSkufeeResponse = {
+  count?: number(description='预下单的数量', example='100', name='count'),
+  rate?: string(description='费率', example='0.006', name='rate'),
+  skuId?: string(description='商品ID', example='23546356253462536abc3843', name='sku_id'),
+  totalAmount?: number(description='总集分宝数量（个）', example='10000', name='total_amount'),
+  totalCost?: string(description='总费用', example='100.06', name='total_cost'),
+}
+
+/**
+ * Description: 根据商品ID，查询批量购买的费率
+ * Summary: 数字商品服务-商品服务-商品费率查询
+ */
+async function queryMypointsSkufee(request: QueryMypointsSkufeeRequest): QueryMypointsSkufeeResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMypointsSkufeeEx(request, runtime);
+}
+
+/**
+ * Description: 根据商品ID，查询批量购买的费率
+ * Summary: 数字商品服务-商品服务-商品费率查询
+ */
+async function queryMypointsSkufeeEx(request: QueryMypointsSkufeeRequest, runtime: Util.RuntimeOptions): QueryMypointsSkufeeResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.mypoints.skufee.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryBlockanalysisUnwriteoffvalueRequest = {
+  assetId?: string(description='资产ID', example='asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  optTenantId?: string(description='要查询的租户ID', example='GYDUYT', name='opt_tenant_id'),
+}
+
+model QueryBlockanalysisUnwriteoffvalueResponse = {
+  assetId?: string(description='资产ID', example='AssetID', name='asset_id'),
+  tenantId?: string(description='租户ID', example='tenantID', name='tenant_id'),
+  totalValue?: string(description='未核销的资产总额（单位：元）', example='54.45', name='total_value'),
+}
+
+/**
+ * Description: 查询商户的可提现资产价值(单位:分)
+ * Summary: 数字商品服务-拉块服务-查询可提现资产
+ */
+async function queryBlockanalysisUnwriteoffvalue(request: QueryBlockanalysisUnwriteoffvalueRequest): QueryBlockanalysisUnwriteoffvalueResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryBlockanalysisUnwriteoffvalueEx(request, runtime);
+}
+
+/**
+ * Description: 查询商户的可提现资产价值(单位:分)
+ * Summary: 数字商品服务-拉块服务-查询可提现资产
+ */
+async function queryBlockanalysisUnwriteoffvalueEx(request: QueryBlockanalysisUnwriteoffvalueRequest, runtime: Util.RuntimeOptions): QueryBlockanalysisUnwriteoffvalueResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.blockanalysis.unwriteoffvalue.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryMerchantExchangeableequitydetailRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  skuId?: string(description='商品SKUID', example='20200407050700000000404', name='sku_id'),
+}
+
+model QueryMerchantExchangeableequitydetailResponse = {
+  equity?: EquityDetail(description='可兑换的商品详情信息', example='', name='equity'),
+}
+
+/**
+ * Description: 只有代理到数字商品管理后台的商户才能查询到信息。查询商户可兑换的商品明细信息
+ * Summary: 数字商品服务-商户管理-查询可兑商品明细
+ */
+async function queryMerchantExchangeableequitydetail(request: QueryMerchantExchangeableequitydetailRequest): QueryMerchantExchangeableequitydetailResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryMerchantExchangeableequitydetailEx(request, runtime);
+}
+
+/**
+ * Description: 只有代理到数字商品管理后台的商户才能查询到信息。查询商户可兑换的商品明细信息
+ * Summary: 数字商品服务-商户管理-查询可兑商品明细
+ */
+async function queryMerchantExchangeableequitydetailEx(request: QueryMerchantExchangeableequitydetailRequest, runtime: Util.RuntimeOptions): QueryMerchantExchangeableequitydetailResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.merchant.exchangeableequitydetail.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecDataDepositRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  data?: string(description='存证信息，根据业务场景确定内容', example='存证信息', name='data'),
+  to?: string(description='存证目标账户（区块链账户地址），该账户可以通过拉块获取到存证信息', example='288ca9e665e93dc47fb424412eb...39b8866f32b45242363a1a16fb4', name='to'),
+}
+
+model ExecDataDepositResponse = {
+  txHash?: string(description='存证交易哈希', example='01953ef5996a12f58f093f3ca7e10...59f6ac2bdc01a69e9445e7a19db3f27e', name='tx_hash'),
+}
+
+/**
+ * Description: 原生存证接口
+ * Summary: 数字商品服务-存证服务-原生存证
+ */
+async function execDataDeposit(request: ExecDataDepositRequest): ExecDataDepositResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execDataDepositEx(request, runtime);
+}
+
+/**
+ * Description: 原生存证接口
+ * Summary: 数字商品服务-存证服务-原生存证
+ */
+async function execDataDepositEx(request: ExecDataDepositRequest, runtime: Util.RuntimeOptions): ExecDataDepositResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.data.deposit.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecCardChargeRequest = {
+  chainId?: string(description='链ID', example='mypoints', name='chain_id'),
+  tx?: Transaction(description='交易信息', example='', name='tx'),
+}
+
+model ExecCardChargeResponse = {
+}
+
+/**
+ * Description: 充值卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-充值卡密
+ */
+async function execCardCharge(request: ExecCardChargeRequest): ExecCardChargeResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execCardChargeEx(request, runtime);
+}
+
+/**
+ * Description: 充值卡密，卡密托管服务调用，需要传入交易的签名
+ * Summary: 数字商品服务-消费卡服务-充值卡密
+ */
+async function execCardChargeEx(request: ExecCardChargeRequest, runtime: Util.RuntimeOptions): ExecCardChargeResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.card.charge.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetGrantrefundRequest = {
+  amount?: number(description='数量', example='100', name='amount'),
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='备注信息', example='info', name='info'),
+  originTxId?: string(description='要回退的交易ID', example='5238645821763', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='80798665464', name='out_tx_id'),
+  userId?: string(description='用户ID', example='user001', name='user_id'),
+}
+
+model ExecAssetGrantrefundResponse = {
+}
+
+/**
+ * Description: 发放回退资产
+ * Summary: 数字商品服务-资产服务-发放回退资产
+ */
+async function execAssetGrantrefund(request: ExecAssetGrantrefundRequest): ExecAssetGrantrefundResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetGrantrefundEx(request, runtime);
+}
+
+/**
+ * Description: 发放回退资产
+ * Summary: 数字商品服务-资产服务-发放回退资产
+ */
+async function execAssetGrantrefundEx(request: ExecAssetGrantrefundRequest, runtime: Util.RuntimeOptions): ExecAssetGrantrefundResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.grantrefund.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetExpireRequest = {
+  amount?: number(description='数量', example='1000', name='amount'),
+  assetId?: string(description='资产ID', example='"asset01"', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='资产过期信息', example='info', name='info'),
+  originalTxId?: string(description='过期的交易ID', example='52347651376', name='original_tx_id'),
+  outTxId?: string(description='外部交易ID，每个租户保证唯一', example='23875487', name='out_tx_id'),
+  userId?: string(description='用户ID', example='"user01"', name='user_id'),
+}
+
+model ExecAssetExpireResponse = {
+}
+
+/**
+ * Description: 资产过期
+ * Summary: 数字商品服务-资产服务-资产过期
+ */
+async function execAssetExpire(request: ExecAssetExpireRequest): ExecAssetExpireResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetExpireEx(request, runtime);
+}
+
+/**
+ * Description: 资产过期
+ * Summary: 数字商品服务-资产服务-资产过期
+ */
+async function execAssetExpireEx(request: ExecAssetExpireRequest, runtime: Util.RuntimeOptions): ExecAssetExpireResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.expire.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetIssueRequest = {
+  amount?: number(description='充值数量', example='100', name='amount'),
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='备注信息', example='info', name='info'),
+  optTenantId?: string(description='充值租户ID', example='NHGYTUHG', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='097623854762cs', name='out_tx_id'),
+}
+
+model ExecAssetIssueResponse = {
+}
+
+/**
+ * Description: 资产初始化发行
+ * Summary: 数字商品服务-资产服务-资产初始化发行
+ */
+async function execAssetIssue(request: ExecAssetIssueRequest): ExecAssetIssueResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetIssueEx(request, runtime);
+}
+
+/**
+ * Description: 资产初始化发行
+ * Summary: 数字商品服务-资产服务-资产初始化发行
+ */
+async function execAssetIssueEx(request: ExecAssetIssueRequest, runtime: Util.RuntimeOptions): ExecAssetIssueResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.issue.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetAdjustRequest = {
+  amount?: number(description='风控调整数量', example='100', name='amount'),
+  assetId?: string(description='资产ID', example='asset01', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='风控调整信息', example='info', name='info'),
+  outTxId?: string(description='外部交易ID，每个租户保证唯一', example='25384582', name='out_tx_id'),
+  userId?: string(description='用户ID', example='“user01”', name='user_id'),
+}
+
+model ExecAssetAdjustResponse = {
+}
+
+/**
+ * Description: 风控调整资产
+ * Summary: 数字商品服务-资产服务-风控调整资产
+ */
+async function execAssetAdjust(request: ExecAssetAdjustRequest): ExecAssetAdjustResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetAdjustEx(request, runtime);
+}
+
+/**
+ * Description: 风控调整资产
+ * Summary: 数字商品服务-资产服务-风控调整资产
+ */
+async function execAssetAdjustEx(request: ExecAssetAdjustRequest, runtime: Util.RuntimeOptions): ExecAssetAdjustResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.adjust.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityRequest = {
+  authType?: number(description='授权类型：0 Auto，1 Contract', example='0，1', name='auth_type'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  currency?: string(description='货币类型', example='CNY', name='currency'),
+  defaultPrice?: string(description='默认价格（单位：元）', example='10000.0000', name='default_price'),
+  delegatedTenantId?: string(description='要代理的租户ID', example='tenant', name='delegated_tenant_id'),
+  description?: string(description='权益商品详细描述信息', example='equity', name='description'),
+  descImages?: string(description='描述图片信息(;分隔)', example='oss1;oss2;oss3', name='desc_images'),
+  equityId?: string(description='权益商品ID', example='equity001', name='equity_id'),
+  equityName?: string(description='权益商品名称', example='equity', name='equity_name'),
+  equityType?: number(description='权益商品类型：类型为整型（不大于：2147483647），需要进行细分，类型由三部分组成；aabbbbcccc。aa 为大类分类，bbbb 为细项分类（无细项分类时为0000），cccc 为数据格式分类（其中0000表示无格式要求）。请根据实际商品类型填写，具体类型和兑换时数据结构查看文档【https://tech.antfin.com/docs/2/163896】', example='0200050002', name='equity_type'),
+  ifPublic?: boolean(description='权益商品是否公开', example='true, false', name='if_public'),
+  images?: string(description='主图片信息(;分隔)', example='oss1;oss2;oss3', name='images'),
+  limitPerMerchantAndDay?: number(description='商户每日兑换上限', example='100000', name='limit_per_merchant_and_day'),
+  limitPerMerchantAndMonth?: number(description='商户每月兑换上限', example='100000', name='limit_per_merchant_and_month'),
+  limitPerUserAndDay?: number(description='用户每日兑换上限', example='1000', name='limit_per_user_and_day'),
+  limitPerUserAndMonth?: number(description='用户每月兑换上限', example='100000', name='limit_per_user_and_month'),
+  memo?: string(description='附言', example='这是权益', name='memo'),
+  outTxId?: string(description='交易ID', example='txid', name='out_tx_id'),
+  totalCount?: string(description='库存', example='10000', name='total_count'),
+  useValidNotAfter?: number(description='权益商品使用有效期右闭区间', example='9', name='use_valid_not_after'),
+  useValidNotBefore?: number(description='权益商品使用有效期左闭区间', example='2', name='use_valid_not_before'),
+  validNotAfter?: number(description='权益商品兑换有效期右闭区间', example='10', name='valid_not_after'),
+  validNotBefore?: number(description='权益商品兑换有效期左闭区间', example='1', name='valid_not_before'),
+  value?: string(description='面值（单位：元）', example='10.000', name='value'),
+}
+
+model UpdateEquityResponse = {
+}
+
+/**
+ * Description: 更新商品信息
+ * Summary: 数字商品服务-商品服务-更新商品属性信息
+ */
+async function updateEquity(request: UpdateEquityRequest): UpdateEquityResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityEx(request, runtime);
+}
+
+/**
+ * Description: 更新商品信息
+ * Summary: 数字商品服务-商品服务-更新商品属性信息
+ */
+async function updateEquityEx(request: UpdateEquityRequest, runtime: Util.RuntimeOptions): UpdateEquityResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryAssetInstructionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  originTxId?: string(description='资产流水ID', example='6858578725348', name='origin_tx_id'),
+}
+
+model QueryAssetInstructionResponse = {
+  instruction?: string(description='资产流水完整信息的json字符串。
+direction 交易方向:：0正向交易，1反向交易。
+type 交易类型：0 资产发行；1资产赎回；2资产发放；3资产发放回退；4资产风控调整；5资产过期；6资产支付；7资产支付退款。
+status流水状态(Complete)；0完成', example='{"outBizID":"111","tenantID":"Bjhv32bjcab","assetID":"asset","assetIssuerID":"f79097436240ea1fef9728","direction":0,"type":0,"timeStamp":1581347704,"originalOutBizID":"110","fromID":"aaa","toID":"ccc","amount":"1","remainAmount":"2","status":0}', name='instruction'),
+}
+
+/**
+ * Description: 检索资产流转流水
+ * Summary: 数字商品服务-资产服务-查询资产流转流水
+ */
+async function queryAssetInstruction(request: QueryAssetInstructionRequest): QueryAssetInstructionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryAssetInstructionEx(request, runtime);
+}
+
+/**
+ * Description: 检索资产流转流水
+ * Summary: 数字商品服务-资产服务-查询资产流转流水
+ */
+async function queryAssetInstructionEx(request: QueryAssetInstructionRequest, runtime: Util.RuntimeOptions): QueryAssetInstructionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.instruction.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetGenerateRequest = {
+  amount?: string(description='铸币数量', example='1000000', name='amount'),
+  assetId?: string(description='资产ID', example='AssetID', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  outTxId?: string(description='外部交易ID', example='out_tx_id12345678', name='out_tx_id'),
+}
+
+model ExecAssetGenerateResponse = {
+}
+
+/**
+ * Description: 资产铸币(不扣减备付金)，合约管理员操作
+ * Summary: 数字商品服务-资产服务-资产铸币
+ */
+async function execAssetGenerate(request: ExecAssetGenerateRequest): ExecAssetGenerateResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetGenerateEx(request, runtime);
+}
+
+/**
+ * Description: 资产铸币(不扣减备付金)，合约管理员操作
+ * Summary: 数字商品服务-资产服务-资产铸币
+ */
+async function execAssetGenerateEx(request: ExecAssetGenerateRequest, runtime: Util.RuntimeOptions): ExecAssetGenerateResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.generate.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryAssetRequest = {
+  assetId?: string(description='资产ID', example='asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  optTenantId?: string(description='资产查询相关的租户ID', example='opt', name='opt_tenant_id'),
+  userId?: string(description='若要查询用户持有的资产数量，输入用户ID', example='user001', name='user_id'),
+}
+
+model QueryAssetResponse = {
+  asset?: Asset(description='资产完整信息
+{
+            "asset_id": "CT::Asset001",
+            "asset_name": "CTPoints",
+            "tenant_id": "OREDKOCN",
+            "admin_id": "f46857d8796fc2b829862e2752bda38f7eefeec5581ad41398002f50a3ad8ccd",
+            "currency": "CNY",
+            "asset_rate": "1000.0000",
+            "total_issue_balance": "11111111.0000",
+            "issue_account_balance": "0.0000",
+            "relay_Account_balance": "0.0000",
+            "receive_payment_account_balance": "0.0000",
+            "overdue_recovery_account_balance": "",
+            "status": 76,
+            "asset_ext_info": {
+                "dispense_tenant_id": "",
+                "dispense_balance": "",
+                "user_id": "",
+                "user_credit_balance": ""
+            }
+        }', example='', name='asset'),
+}
+
+/**
+ * Description: 资产查询
+ * Summary: 数字商品服务-资产服务-资产查询
+ */
+async function queryAsset(request: QueryAssetRequest): QueryAssetResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryAssetEx(request, runtime);
+}
+
+/**
+ * Description: 资产查询
+ * Summary: 数字商品服务-资产服务-资产查询
+ */
+async function queryAssetEx(request: QueryAssetRequest, runtime: Util.RuntimeOptions): QueryAssetResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetCreateRequest = {
+  assetId?: string(description='资产ID', example='AssetID', name='asset_id'),
+  assetName?: string(description='资产名称', example='AssetName', name='asset_name'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  currency?: string(description='资产绑定币种', example='CNY', name='currency'),
+  optTenantId?: string(description='为该租户创建新资产', example='ABCDEFGH', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='out_tx_id', name='out_tx_id'),
+  rate?: string(description='资产汇率(等值一元钱的数量)', example='100', name='rate'),
+}
+
+model ExecAssetCreateResponse = {
+}
+
+/**
+ * Description: 创建新资产
+ * Summary: 数字商品服务-资产服务-创建资产
+ */
+async function execAssetCreate(request: ExecAssetCreateRequest): ExecAssetCreateResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetCreateEx(request, runtime);
+}
+
+/**
+ * Description: 创建新资产
+ * Summary: 数字商品服务-资产服务-创建资产
+ */
+async function execAssetCreateEx(request: ExecAssetCreateRequest, runtime: Util.RuntimeOptions): ExecAssetCreateResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.create.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityValidtimeRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='23584657', name='out_tx_id'),
+  useValidNotAfter?: string(description='权益商品使用有效期右闭区间', example='1000', name='use_valid_not_after'),
+  useValidNotBefore?: string(description='权益商品使用有效期左闭区间', example='100', name='use_valid_not_before'),
+  validNotAfter?: string(description='权益商品兑换有效期右闭区间', example='10', name='valid_not_after'),
+  validNotBefore?: string(description='权益商品兑换有效期左闭区间', example='1', name='valid_not_before'),
+}
+
+model UpdateEquityValidtimeResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新商品有效期
+ * Summary: 数字商品服务-商品服务-更新有效期
+ */
+async function updateEquityValidtime(request: UpdateEquityValidtimeRequest): UpdateEquityValidtimeResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityValidtimeEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.update
+更新商品有效期
+ * Summary: 数字商品服务-商品服务-更新有效期
+ */
+async function updateEquityValidtimeEx(request: UpdateEquityValidtimeRequest, runtime: Util.RuntimeOptions): UpdateEquityValidtimeResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.validtime.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryEquityRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equity001', name='equity_id'),
+  optTenantId?: string(description='被检索商户ID', example='tenant', name='opt_tenant_id'),
+  targetDate?: string(description='交易限制日期(yyyyMMdd或yyyyMM)(可选)', example='yyyyMMdd', name='target_date'),
+  userId?: string(description='被检索用户ID', example='user', name='user_id'),
+}
+
+model QueryEquityResponse = {
+  equity?: Equity(description='权益商品完整信息: equityType 权益类型：0积分，1卡券，2实物。 status 权益状态：0可用状态，1下线，2冻结。 authType 权益授权类型：0自动，1合约。
+ { "equity_id": "6041f851f4d", "tenant_id": "ZEJEZKUA", "admin_id": "ed7b3ac3c061", "equity_type": 1, "equity_name": "FDCardtest", "description": "FDCard", "total_count": "1000000", "status": 0, "auth_type": 0, "currency": "CNY", "value": "10.0000", "default_price": "1.0000", "images": "oss://myexchange/12593acf32dd6d4257fa0.jpeg", "desc_images": "", "memo": "", "is_public": true, "valid_not_before": 112692, "valid_not_after": 112654365244, "use_valid_not_before": 112612, "use_valid_not_after": 11265436524415235, "limit_per_user_and_day": 1000000, "limit_per_user_and_month": 100000, "limit_per_merchant_and_day": 1000000, "limit_per_merchant_and_month": 1000000, "equity_ext_info": { "open_to_tenant_id": "", "tenant_price": "", "tenant_user_price": { "snapshot_tenant_price": "", "user_price_type": 0, "price": "", "ratio": "" }, "target_date": "", "limit_per_day_used": 0, "limit_per_month_used": 0 } }', example='', name='equity'),
+  urls?: [ string ](description='权益图片的永久oss地址', example='[oss1, oss2, oss3]', name='urls'),
+}
+
+/**
+ * Description: 查询商品信息
+ * Summary: 数字商品服务-商品服务-查询商品信息
+ */
+async function queryEquity(request: QueryEquityRequest): QueryEquityResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryEquityEx(request, runtime);
+}
+
+/**
+ * Description: 查询商品信息
+ * Summary: 数字商品服务-商品服务-查询商品信息
+ */
+async function queryEquityEx(request: QueryEquityRequest, runtime: Util.RuntimeOptions): QueryEquityResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetGrantRequest = {
+  amount?: string(description='数量', example='100', name='amount'),
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='资产发放信息', example='info', name='info'),
+  merchantId?: string(description='商户ID', example='288ca9e665e93dc47fb424412eb4614695ab139b8866f32b45242363a1a16fb4', name='merchant_id'),
+  outTxId?: string(description='外部交易ID', example='623874623897', name='out_tx_id'),
+  userId?: string(description='用户ID', example='user001', name='user_id'),
+  validityTime?: string(description='有效时间', example='1256354635', name='validity_time'),
+}
+
+model ExecAssetGrantResponse = {
+}
+
+/**
+ * Description: 发放资产
+ * Summary: 数字商品服务-资产服务-发放资产
+ */
+async function execAssetGrant(request: ExecAssetGrantRequest): ExecAssetGrantResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetGrantEx(request, runtime);
+}
+
+/**
+ * Description: 发放资产
+ * Summary: 数字商品服务-资产服务-发放资产
+ */
+async function execAssetGrantEx(request: ExecAssetGrantRequest, runtime: Util.RuntimeOptions): ExecAssetGrantResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.grant.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecAssetRedeemRequest = {
+  amount?: number(description='赎回数量', example='100', name='amount'),
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  info?: string(description='备注信息', example='info', name='info'),
+  originTxId?: string(description='要赎回的充值交易ID', example='585817326', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='897927467', name='out_tx_id'),
+}
+
+model ExecAssetRedeemResponse = {
+}
+
+/**
+ * Description: 赎回资产
+ * Summary: 数字商品服务-资产服务-赎回资产
+ */
+async function execAssetRedeem(request: ExecAssetRedeemRequest): ExecAssetRedeemResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execAssetRedeemEx(request, runtime);
+}
+
+/**
+ * Description: 赎回资产
+ * Summary: 数字商品服务-资产服务-赎回资产
+ */
+async function execAssetRedeemEx(request: ExecAssetRedeemRequest, runtime: Util.RuntimeOptions): ExecAssetRedeemResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.asset.redeem.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ConfirmExchangeAftersaleRequest = {
+  chainId?: string(description='链id', example='antdao', name='chain_id'),
+  equityId?: string(description='商品id', example='xxxx', name='equity_id'),
+  memo?: string(description='收货时的信息，若敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='商户确认售后并收货', name='memo'),
+  originTxId?: string(description='关联交易id', example='xxxx', name='origin_tx_id'),
+  outTxId?: string(description='外部交易id', example='x x x', name='out_tx_id'),
+}
+
+model ConfirmExchangeAftersaleResponse = {
+}
+
+/**
+ * Description: 商户确认售后（供应商）comfirmaftersale
+ * Summary:  数字商品服务-兑换服务-商户确认售后
+ */
+async function confirmExchangeAftersale(request: ConfirmExchangeAftersaleRequest): ConfirmExchangeAftersaleResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return confirmExchangeAftersaleEx(request, runtime);
+}
+
+/**
+ * Description: 商户确认售后（供应商）comfirmaftersale
+ * Summary:  数字商品服务-兑换服务-商户确认售后
+ */
+async function confirmExchangeAftersaleEx(request: ConfirmExchangeAftersaleRequest, runtime: Util.RuntimeOptions): ConfirmExchangeAftersaleResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.aftersale.confirm', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ApplyExchangeAftersaleRequest = {
+  chainId?: string(description='链id', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品id', example='equity', name='equity_id'),
+  memo?: string(description='额外信息 可选', example='可选', name='memo'),
+  originTxId?: string(description='关联交易ID', example='xxxxx', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='xxxxx', name='out_tx_id'),
+}
+
+model ApplyExchangeAftersaleResponse = {
+}
+
+/**
+ * Description: 兑换单申请售后（采购商）
+ * Summary: 数字商品服务-兑换服务-申请售后(商家)
+ */
+async function applyExchangeAftersale(request: ApplyExchangeAftersaleRequest): ApplyExchangeAftersaleResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return applyExchangeAftersaleEx(request, runtime);
+}
+
+/**
+ * Description: 兑换单申请售后（采购商）
+ * Summary: 数字商品服务-兑换服务-申请售后(商家)
+ */
+async function applyExchangeAftersaleEx(request: ApplyExchangeAftersaleRequest, runtime: Util.RuntimeOptions): ApplyExchangeAftersaleResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.aftersale.apply', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityStatusRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equityID', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='124', name='out_tx_id'),
+  status?: number(description='权益状态：0可用，1下线，2冻结', example='0，1，2', name='status'),
+}
+
+model UpdateEquityStatusResponse = {
+}
+
+/**
+ * Description: 更新商品状态（可用，冻结，下线）
+ * Summary: 数字商品服务-商品服务-更新商品状态
+ */
+async function updateEquityStatus(request: UpdateEquityStatusRequest): UpdateEquityStatusResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityStatusEx(request, runtime);
+}
+
+/**
+ * Description: 更新商品状态（可用，冻结，下线）
+ * Summary: 数字商品服务-商品服务-更新商品状态
+ */
+async function updateEquityStatusEx(request: UpdateEquityStatusRequest, runtime: Util.RuntimeOptions): UpdateEquityStatusResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.status.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryExchangeInstructionRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品ID', example='equity', name='equity_id'),
+  optTenantId?: string(description='发起操作的租户ID', example='tenant', name='opt_tenant_id'),
+  originTxId?: string(description='交易ID', example='5465213846596', name='origin_tx_id'),
+}
+
+model QueryExchangeInstructionResponse = {
+  instruction?: EInstruction(description='权益兑换流水完整信息', example='', name='instruction'),
+}
+
+/**
+ * Description: 该接口废弃不用！！！
+查询商品兑换流水
+ * Summary: 数字商品服务-兑换服务-查询商品兑换流水
+ */
+async function queryExchangeInstruction(request: QueryExchangeInstructionRequest): QueryExchangeInstructionResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryExchangeInstructionEx(request, runtime);
+}
+
+/**
+ * Description: 该接口废弃不用！！！
+查询商品兑换流水
+ * Summary: 数字商品服务-兑换服务-查询商品兑换流水
+ */
+async function queryExchangeInstructionEx(request: QueryExchangeInstructionRequest, runtime: Util.RuntimeOptions): QueryExchangeInstructionResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.instruction.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model SendExchangeRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equity', name='equity_id'),
+  memo?: string(description='发货商品的信息，敏感信息需加密，使用收货方公钥加密的权益信息。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896。比如在手机直充时可以返回 {  "voucher": "充值凭证，如有",  "memo": ""}信息。', example='base64', name='memo'),
+  originTxId?: string(description='关联交易ID', example='13584675238674', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='142534765', name='out_tx_id'),
+}
+
+model SendExchangeResponse = {
+}
+
+/**
+ * Description: 兑换发货
+ * Summary: 数字商品服务-兑换服务-兑换发货
+ */
+async function sendExchange(request: SendExchangeRequest): SendExchangeResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return sendExchangeEx(request, runtime);
+}
+
+/**
+ * Description: 兑换发货
+ * Summary: 数字商品服务-兑换服务-兑换发货
+ */
+async function sendExchangeEx(request: SendExchangeRequest, runtime: Util.RuntimeOptions): SendExchangeResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.send', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model AuthEquityMerchantuserpriceRequest = {
+  amount?: string(description='用户兑换价格（单位：元）。价格和比例二选一，且只能填写一个。', example='10.0000', name='amount'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='代理操作专用，要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', name='equity_id'),
+  optTenantId?: string(description='操作用户', example='tenant', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='253645873', name='out_tx_id'),
+  ratio?: string(description='比例。价格和比例二选一，且只能填写一个。', example='1.1', name='ratio'),
+}
+
+model AuthEquityMerchantuserpriceResponse = {
+}
+
+/**
+ * Description: 用户兑换价格设置
+ * Summary: 数字商品服务-商品服务-用户兑换价格设置
+ */
+async function authEquityMerchantuserprice(request: AuthEquityMerchantuserpriceRequest): AuthEquityMerchantuserpriceResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return authEquityMerchantuserpriceEx(request, runtime);
+}
+
+/**
+ * Description: 用户兑换价格设置
+ * Summary: 数字商品服务-商品服务-用户兑换价格设置
+ */
+async function authEquityMerchantuserpriceEx(request: AuthEquityMerchantuserpriceRequest, runtime: Util.RuntimeOptions): AuthEquityMerchantuserpriceResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.merchantuserprice.auth', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model RefuseExchangeAftersaleRequest = {
+  chainId?: string(description='l链id', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='商品id', example='qequity', name='equity_id'),
+  memo?: string(description='额外信息', example='xxx', name='memo'),
+  originTxId?: string(description='关联交易id', example='xxxx', name='origin_tx_id'),
+  outTxId?: string(description='外部交易id', example='xxxx', name='out_tx_id'),
+}
+
+model RefuseExchangeAftersaleResponse = {
+}
+
+/**
+ * Description: 拒绝售后（供应商）
+ * Summary: 数字商品服务-兑换服务-拒绝售后
+ */
+async function refuseExchangeAftersale(request: RefuseExchangeAftersaleRequest): RefuseExchangeAftersaleResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return refuseExchangeAftersaleEx(request, runtime);
+}
+
+/**
+ * Description: 拒绝售后（供应商）
+ * Summary: 数字商品服务-兑换服务-拒绝售后
+ */
+async function refuseExchangeAftersaleEx(request: RefuseExchangeAftersaleRequest, runtime: Util.RuntimeOptions): RefuseExchangeAftersaleResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.aftersale.refuse', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeAgreeaftersaleRequest = {
+  chainId?: string(description='链id', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益id', example='121212', name='equity_id'),
+  memo?: string(description='额外信息', example='sddsadsa', name='memo'),
+  originTxId?: string(description='关联交易id', example='xxxx', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='xxxx', name='out_tx_id'),
+}
+
+model ExecExchangeAgreeaftersaleResponse = {
+}
+
+/**
+ * Description: 同意售后（供应商）
+ * Summary: 数字商品服务-兑换服务-同意售后
+ */
+async function execExchangeAgreeaftersale(request: ExecExchangeAgreeaftersaleRequest): ExecExchangeAgreeaftersaleResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeAgreeaftersaleEx(request, runtime);
+}
+
+/**
+ * Description: 同意售后（供应商）
+ * Summary: 数字商品服务-兑换服务-同意售后
+ */
+async function execExchangeAgreeaftersaleEx(request: ExecExchangeAgreeaftersaleRequest, runtime: Util.RuntimeOptions): ExecExchangeAgreeaftersaleResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.agreeaftersale.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UpdateEquityTenantpriceRequest = {
+  amount?: string(description='价格（单位：元）', example='10000.0000', name='amount'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', name='equity_id'),
+  optTenantId?: string(description='定向价格租户ID', example='GJHGJFH', name='opt_tenant_id'),
+  outTxId?: string(description='外部交易ID', example='23584653486', name='out_tx_id'),
+}
+
+model UpdateEquityTenantpriceResponse = {
+}
+
+/**
+ * Description: 更新商品自定义定价
+ * Summary: 数字商品服务-商品服务-更新自定义定价
+ */
+async function updateEquityTenantprice(request: UpdateEquityTenantpriceRequest): UpdateEquityTenantpriceResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return updateEquityTenantpriceEx(request, runtime);
+}
+
+/**
+ * Description: 更新商品自定义定价
+ * Summary: 数字商品服务-商品服务-更新自定义定价
+ */
+async function updateEquityTenantpriceEx(request: UpdateEquityTenantpriceRequest, runtime: Util.RuntimeOptions): UpdateEquityTenantpriceResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.tenantprice.update', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model QueryImageRequest = {
+  urls?: [ string ](description='要查询的图片数组，填入不可访问的url', example='[url1,url2,url3]', name='urls'),
+}
+
+model QueryImageResponse = {
+  urls?: [ MultiURL ](description='临时可访问的oss图片链接，每张图片会返回四个url，对应原图和不同的比例缩小，每一张图片的四个url用;隔开。', example='', name='urls'),
+}
+
+/**
+ * Description: 传入图片的不可访问URL，获取图片的临时可访问URL（支持批量查询）
+ * Summary: 数字商品服务-OSS服务-获取图片URL
+ */
+async function queryImage(request: QueryImageRequest): QueryImageResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return queryImageEx(request, runtime);
+}
+
+/**
+ * Description: 传入图片的不可访问URL，获取图片的临时可访问URL（支持批量查询）
+ * Summary: 数字商品服务-OSS服务-获取图片URL
+ */
+async function queryImageEx(request: QueryImageRequest, runtime: Util.RuntimeOptions): QueryImageResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.image.query', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model OfflineEquityRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品ID', example='7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', name='equity_id'),
+  outTxId?: string(description='外部交易ID', example='5238465283645', name='out_tx_id'),
+}
+
+model OfflineEquityResponse = {
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.status.update
+下线商品
+ * Summary: 数字商品服务-商品服务-下线商品
+ */
+async function offlineEquity(request: OfflineEquityRequest): OfflineEquityResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return offlineEquityEx(request, runtime);
+}
+
+/**
+ * Description: 该接口不使用，合并至 baas.antdao.equity.status.update
+下线商品
+ * Summary: 数字商品服务-商品服务-下线商品
+ */
+async function offlineEquityEx(request: OfflineEquityRequest, runtime: Util.RuntimeOptions): OfflineEquityResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.equity.offline', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model SendExchangeAftersaleRequest = {
+  chainId?: string(description='链id', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='商品id', example='xxx', name='equity_id'),
+  memo?: string(description='发货商品的信息，敏感信息需加密，使用收货方公钥加密的权益信息。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896。比如在手机直充时可以返回 {  "voucher": "充值凭证，如有",  "memo": ""}信息。', example='base64', name='memo'),
+  originTxId?: string(description='关联交易id', example='xxxx', name='origin_tx_id'),
+  outTxId?: string(description='外部交易id', example='xxxxx', name='out_tx_id'),
+}
+
+model SendExchangeAftersaleResponse = {
+}
+
+/**
+ * Description: 重新发货（供应商）
+ * Summary: 数字商品服务-兑换服务-重新发货
+ */
+async function sendExchangeAftersale(request: SendExchangeAftersaleRequest): SendExchangeAftersaleResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return sendExchangeAftersaleEx(request, runtime);
+}
+
+/**
+ * Description: 重新发货（供应商）
+ * Summary: 数字商品服务-兑换服务-重新发货
+ */
+async function sendExchangeAftersaleEx(request: SendExchangeAftersaleRequest, runtime: Util.RuntimeOptions): SendExchangeAftersaleResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.aftersale.send', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeBymerchantRequest = {
+  assetId?: string(description='资产ID', example='Asset001', name='asset_id'),
+  assetRate?: string(description='期望资产汇率', example='1.1', name='asset_rate'),
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品ID，例：7f1be9108651f97513b5b59030f5b059e58a59d263ab426cbf26337f91642caa', example='7f1be910...', name='equity_id'),
+  equityPrice?: string(description='期望权益商品价格（单位：元）', example='10.0000', name='equity_price'),
+  memo?: string(description='兑换时必要的信息，敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896
+比如在兑换手机直充商品时，需要对{"countryCode": "86", "phone": "13900000000"} 使用供应商的公钥进行加密。', example='memo', name='memo'),
+  outTxId?: string(description='权益商品兑换外部流水ID，调用方自定义流水ID', example='25374652374', name='out_tx_id'),
+  txSig?: string(description='采购商如果绑定了附加的公私钥对。在兑换商品时需要对SHA256(out_tx_id+tenant_id+asset_id+equity_id+equity_price+asset_rate+user_id+memo)使用ECC K1私钥签名（算法ECDSAWithSHA256，曲线Secp256K1），并转换为Hex。', example='cac...b86', name='tx_sig'),
+  userId?: string(description='受益用户ID', example='user001', name='user_id'),
+}
+
+model ExecExchangeBymerchantResponse = {
+}
+
+/**
+ * Description: 商户发起兑换
+ * Summary: 数字商品服务-商品服务-商户发起兑换
+ */
+async function execExchangeBymerchant(request: ExecExchangeBymerchantRequest): ExecExchangeBymerchantResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeBymerchantEx(request, runtime);
+}
+
+/**
+ * Description: 商户发起兑换
+ * Summary: 数字商品服务-商品服务-商户发起兑换
+ */
+async function execExchangeBymerchantEx(request: ExecExchangeBymerchantRequest, runtime: Util.RuntimeOptions): ExecExchangeBymerchantResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.bymerchant.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model UploadImageRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  contentType?: string(description='图片MIME类型，目前仅支持 image/jpeg', example='image/jpeg', name='content_type'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  image?: string(description='图片信息（base64编码）', example='...KwQkUzoq0toWc2DVXk3WurM+gvAuEM1kUb5wvVZHNeA=', name='image'),
+}
+
+model UploadImageResponse = {
+  temporaryUrl?: string(description='临时可访问的url，过期时间2小时', example='https://myexchange.oss-cn-hangzhou.aliyuncs.com/3dccde5f050ebebda7c2e97f1ac7d3678adb43be92d7eb2bf16bdd42ab055afd.jpeg?Expires=1581581946&OSSAccessKeyId=LTAI4FooxCSL7w8Minh2oJqc&Signature=Z5TQBAohn6RjvevJf1RfvjthlIM%3D', name='temporary_url'),
+  url?: string(description='图片的不可访问url，发布权益时使用', example='oss://myexchange/1259371fc8f77d37aab22d949ea51f4982fea55dfb6d130facf32dd6d4257fa0.jpeg', name='url'),
+}
+
+/**
+ * Description: 上传图片到OSS，以备风控检查。仅权益发行方可使用，采购方不可使用。上传的图片单张不超过1M。
+ * Summary: 数字商品服务-OSS服务-上传图片
+ */
+async function uploadImage(request: UploadImageRequest): UploadImageResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return uploadImageEx(request, runtime);
+}
+
+/**
+ * Description: 上传图片到OSS，以备风控检查。仅权益发行方可使用，采购方不可使用。上传的图片单张不超过1M。
+ * Summary: 数字商品服务-OSS服务-上传图片
+ */
+async function uploadImageEx(request: UploadImageRequest, runtime: Util.RuntimeOptions): UploadImageResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.image.upload', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeOutofstoreRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='delegated_tenant_id', name='delegated_tenant_id'),
+  equityId?: string(description='权益商品ID', example='equity', name='equity_id'),
+  memo?: string(description='缺货时通知给采购方的信息，若敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='缺货', name='memo'),
+  originTxId?: string(description='关联交易ID', example='64857389745', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='12385648364', name='out_tx_id'),
+}
+
+model ExecExchangeOutofstoreResponse = {
+}
+
+/**
+ * Description: 缺货回执
+ * Summary: 数字商品服务-兑换服务-缺货回执
+ */
+async function execExchangeOutofstore(request: ExecExchangeOutofstoreRequest): ExecExchangeOutofstoreResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeOutofstoreEx(request, runtime);
+}
+
+/**
+ * Description: 缺货回执
+ * Summary: 数字商品服务-兑换服务-缺货回执
+ */
+async function execExchangeOutofstoreEx(request: ExecExchangeOutofstoreRequest, runtime: Util.RuntimeOptions): ExecExchangeOutofstoreResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.outofstore.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeReceivebymerchantRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  equityId?: string(description='权益商品ID', example='equity', name='equity_id'),
+  memo?: string(description='收货时的信息，若敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='采购商收获', name='memo'),
+  originTxId?: string(description='关联交易ID', example='643785349879638', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='13254865', name='out_tx_id'),
+}
+
+model ExecExchangeReceivebymerchantResponse = {
+}
+
+/**
+ * Description: 商户确认收货
+ * Summary: 数字商品服务-兑换服务-商户确认收货
+ */
+async function execExchangeReceivebymerchant(request: ExecExchangeReceivebymerchantRequest): ExecExchangeReceivebymerchantResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeReceivebymerchantEx(request, runtime);
+}
+
+/**
+ * Description: 商户确认收货
+ * Summary: 数字商品服务-兑换服务-商户确认收货
+ */
+async function execExchangeReceivebymerchantEx(request: ExecExchangeReceivebymerchantRequest, runtime: Util.RuntimeOptions): ExecExchangeReceivebymerchantResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.receivebymerchant.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
+model ExecExchangeReceivebyuserRequest = {
+  chainId?: string(description='链ID', example='antdao', name='chain_id'),
+  delegatedTenantId?: string(description='要代理操作的租户ID', example='tenant', name='delegated_tenant_id'),
+  memo?: string(description='收货时的信息，若敏感信息需加密。实际数据结构根据商品类型和描述输入，可参考https://tech.antfin.com/docs/2/163896', example='用户收货', name='memo'),
+  originTxId?: string(description='关联交易ID', example='72341375271356', name='origin_tx_id'),
+  outTxId?: string(description='外部交易ID', example='12543526', name='out_tx_id'),
+  userId?: string(description='用户ID', example='user001', name='user_id'),
+}
+
+model ExecExchangeReceivebyuserResponse = {
+}
+
+/**
+ * Description: 用户确认收货
+ * Summary: 数字商品服务-兑换服务-用户确认收货
+ */
+async function execExchangeReceivebyuser(request: ExecExchangeReceivebyuserRequest): ExecExchangeReceivebyuserResponse {
+  var runtime = new Util.RuntimeOptions{};
+  return execExchangeReceivebyuserEx(request, runtime);
+}
+
+/**
+ * Description: 用户确认收货
+ * Summary: 数字商品服务-兑换服务-用户确认收货
+ */
+async function execExchangeReceivebyuserEx(request: ExecExchangeReceivebyuserRequest, runtime: Util.RuntimeOptions): ExecExchangeReceivebyuserResponse {
+  Util.validateModel(request);
+  return doRequest('baas.antdao.exchange.receivebyuser.exec', 'HTTPS', 'POST', `/gateway.do`, request, runtime);
+}
+
