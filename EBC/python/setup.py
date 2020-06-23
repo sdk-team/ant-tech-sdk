@@ -23,7 +23,7 @@ import os
 """
 setup module for alipaycloud_ebc.
 
-Created on 22/06/2020
+Created on 23/06/2020
 
 @author: Alipay Cloud SDK
 """

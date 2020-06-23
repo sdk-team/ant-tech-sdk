@@ -101,15 +101,15 @@ class Cert(TeaModel):
         if self.cert_code:
             self.validate_max_length(cert_code, 'cert_code', 64)
         if self.cert_end_time:
-            self.validate_pattern(cert_end_time, 'cert_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_end_time, 'cert_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.cert_id:
             self.validate_max_length(cert_id, 'cert_id', 128)
         if self.cert_name_cn:
             self.validate_max_length(cert_name_cn, 'cert_name_cn', 64)
         if self.cert_publish_time:
-            self.validate_pattern(cert_publish_time, 'cert_publish_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_publish_time, 'cert_publish_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.cert_start_time:
-            self.validate_pattern(cert_start_time, 'cert_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_start_time, 'cert_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.cert_url:
             self.validate_max_length(cert_url, 'cert_url', 256)
         if self.country:
@@ -516,11 +516,11 @@ class QueryOrganizationCertRequest(TeaModel):
 
     def validate(self):
         if self.end:
-            self.validate_pattern(end, 'end', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(end, 'end', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.org_did:
             self.validate_max_length(org_did, 'org_did', 128)
         if self.start:
-            self.validate_pattern(start, 'start', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(start, 'start', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
 
     def to_map(self):
         result = {}
@@ -723,11 +723,11 @@ class CreateOrganizationClassRequest(TeaModel):
 
     def validate(self):
         if self.class_end_time:
-            self.validate_pattern(class_end_time, 'class_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(class_end_time, 'class_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.class_name:
             self.validate_max_length(class_name, 'class_name', 64)
         if self.class_start_time:
-            self.validate_pattern(class_start_time, 'class_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(class_start_time, 'class_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.org_did:
             self.validate_max_length(org_did, 'org_did', 128)
 
@@ -885,13 +885,13 @@ class UpdateOrganizationCourseRequest(TeaModel):
 
     def validate(self):
         if self.course_end_time:
-            self.validate_pattern(course_end_time, 'course_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(course_end_time, 'course_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.course_id:
             self.validate_max_length(course_id, 'course_id', 128)
         if self.course_name:
             self.validate_max_length(course_name, 'course_name', 64)
         if self.course_start_time:
-            self.validate_pattern(course_start_time, 'course_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(course_start_time, 'course_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.org_did:
             self.validate_max_length(org_did, 'org_did', 128)
 
@@ -989,15 +989,15 @@ class CreateUserCertRequest(TeaModel):
         if self.cert_code:
             self.validate_max_length(cert_code, 'cert_code', 64)
         if self.cert_end_time:
-            self.validate_pattern(cert_end_time, 'cert_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_end_time, 'cert_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.cert_name_cn:
             self.validate_max_length(cert_name_cn, 'cert_name_cn', 64)
         if self.cert_name_en:
             self.validate_max_length(cert_name_en, 'cert_name_en', 64)
         if self.cert_publish_time:
-            self.validate_pattern(cert_publish_time, 'cert_publish_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_publish_time, 'cert_publish_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.cert_start_time:
-            self.validate_pattern(cert_start_time, 'cert_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(cert_start_time, 'cert_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.country:
             self.validate_max_length(country, 'country', 32)
         if self.holder_name:
@@ -1281,9 +1281,9 @@ class QueryOrganizationClassResponse(TeaModel):
 
     def validate(self):
         if self.create_time:
-            self.validate_pattern(create_time, 'create_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(create_time, 'create_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.modify_time:
-            self.validate_pattern(modify_time, 'modify_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(modify_time, 'modify_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
 
     def to_map(self):
         result = {}
@@ -1319,13 +1319,13 @@ class UpdateOrganizationClassRequest(TeaModel):
 
     def validate(self):
         if self.class_end_time:
-            self.validate_pattern(class_end_time, 'class_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(class_end_time, 'class_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.class_id:
             self.validate_max_length(class_id, 'class_id', 128)
         if self.class_name:
             self.validate_max_length(class_name, 'class_name', 64)
         if self.class_start_time:
-            self.validate_pattern(class_start_time, 'class_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(class_start_time, 'class_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.org_did:
             self.validate_max_length(org_did, 'org_did', 128)
 
@@ -1426,11 +1426,11 @@ class CreateOrganizationCourseRequest(TeaModel):
 
     def validate(self):
         if self.course_end_time:
-            self.validate_pattern(course_end_time, 'course_end_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(course_end_time, 'course_end_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.course_name:
             self.validate_max_length(course_name, 'course_name', 64)
         if self.course_start_time:
-            self.validate_pattern(course_start_time, 'course_start_time', \\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?)
+            self.validate_pattern(course_start_time, 'course_start_time', '\\d{4}[-]\\d{1,2}[-]\\d{1,2}(\\s\\d{2}:\\d{2}(:\\d{2})?)?')
         if self.org_did:
             self.validate_max_length(org_did, 'org_did', 128)
 
