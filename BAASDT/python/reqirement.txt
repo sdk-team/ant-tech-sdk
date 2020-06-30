@@ -1,0 +1,4 @@
+alibabacloud-rpc-util==0.0.3
+alibabacloud-tea==0.0.4
+alibabacloud-tea-util==0.1.0
+alipaycloud-alipay-util==0.0.2
